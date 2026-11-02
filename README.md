@@ -13,6 +13,41 @@ Open-source security work by **HORKOS** — fixes, tools, and research released 
 | [`lib/safe-resolver`](lib/safe-resolver) | SSRF-safe DNS resolver: validates every resolved address against private/non-routable ranges | Released |
 | [`tools/scrubber`](tools/scrubber) | Redact a source tree before open-sourcing it | Released |
 
+## Composing the request-safety toolkit
+
+Four of the `lib/` modules are built to click together into one safe outbound-HTTP
+path: `safe-resolver` plugs into `request-guard`'s injected `resolve`, you supply a
+`scope_check`, and `rate-limiter` throttles what the guard admits.
+
+```python
+from safe_resolver import resolve          # lib/safe-resolver
+from request_guard import RequestGuard     # lib/request-guard
+from rate_limiter import TokenBucket       # lib/rate-limiter
+from urllib.parse import urlparse
+
+ALLOWED_HOSTS = {"example.com", "api.example.com"}
+
+class Scope:                               # request-guard reads .in_scope / .reason
+    def __init__(self, url):
+        host = urlparse(url).hostname or ""
+        self.in_scope = host in ALLOWED_HOSTS
+        self.reason = "" if self.in_scope else f"{host} not in allowlist"
+
+guard = RequestGuard(scope_check=Scope, resolve=resolve, max_requests=500)
+bucket = TokenBucket(rate=0.3, burst=3, max_requests=500)
+
+def fetch(url):
+    decision = guard.evaluate(url)         # method + cap + scope + SSRF-safe resolve
+    if not decision.allowed:
+        return None, decision.reason
+    if not bucket.acquire(max_wait=30.0):
+        return None, "rate/budget exhausted"
+    return do_request(url, decision.resolved.ip), None
+```
+
+The guard refuses non-GET/HEAD/OPTIONS, out-of-scope URLs, and hosts that resolve to
+private/non-routable addresses — each fail-closed, before any byte leaves.
+
 ## Layout
 
 - `upstream-fixes/` — bugs found in third-party open-source projects, each with a root-cause write-up, a patch that applies to upstream, and verification results.
