@@ -1,28 +1,41 @@
 # Verification
 
-## Script-level results (bash 5.2, Linux)
+## Full suite (CI)
 
-The patched `rbenv-version-file-read` was run directly against fixture files, comparing the original one-line fix (v1) with this fix (v2).
+rbenv's own test suite (bats v1.10.0, `test/run`, as in rbenv's CI) run on a patched `master` checkout by this repo's [Upstream fixes](../../.github/workflows/upstream-fixes.yml) workflow:
 
-| Input file | Expected | v1 | v2 |
-|---|---|---|---|
-| BOM + `3.3.0` + CRLF | `3.3.0` | pass | pass |
-| BOM + blank lines + `  3.3.0` | `3.3.0` | **exit 1, empty** | pass |
-| BOM + `  3.3.0` | `3.3.0` | **exit 1, empty** | pass |
-| BOM + `../foo` | rejected | rejected | rejected |
-| BOM + `..` | rejected | rejected | rejected |
-| BOM only | exit 1 | exit 1 | exit 1 |
-| `3.3.0` (no BOM) | `3.3.0` | pass | pass |
-| blank line + `  1.9.3 x` | `1.9.3` | pass | pass |
-| BOM + `3.3.0`, `LC_ALL=C` | `3.3.0` | pass | pass |
+| Runner | bash | Tests | Result | ShellCheck |
+|---|---|---|---|---|
+| ubuntu-latest | 5.3.9 | 182 | 182 pass | clean |
+| macos-latest | 3.2.57 (default on the runner) | 182 | 182 pass | — |
+| macos-latest, forced `/bin/bash` | 3.2.57 | 182 | 182 pass | — |
 
-## Full suite
+The workflow re-runs weekly against current rbenv `master` to catch drift.
 
-With the v1 fix, `bats test` ran 180 tests and 179 passed. The one failure, `non-writable shims directory` (`rehash.bats`), fails identically on unpatched `master` in that environment. That test expects a write to a read-only directory to fail; the most likely cause is that the suite ran as root, for whom such writes succeed.
+## Bug caught by the macOS job
 
-## Pending
+An intermediate version of the fix re-read the remainder of the line with `read -d "" -r version _ <<<"$rest"` when the BOM was followed by whitespace. It passed on bash 5 but failed `ignores a UTF-8 byte order mark followed by blank lines` on bash 3.2. Diagnosis on the macOS runner:
 
-- Full `bats` suite with the v2 fix
-- bash 3.2 (macOS) run
+```
+input:            EF BB BF \r \n \r \n ' ' ' ' 3.3.0 \r \n
+bash 3.2 $rest:   "\r\n  3.3.0\r"     (bash 5 strips the leading "\r\n  ")
+read <<<"$rest":  ""                  (exit 1)
+for w in $rest:   first field ""      ("\r" is a non-whitespace IFS character)
+```
 
-Both will be covered by rbenv's CI (macOS and Ubuntu) on [rbenv#1665](https://github.com/rbenv/rbenv/pull/1665).
+The final fix iterates over `$rest` and takes the first non-empty word (globbing disabled with `set -f`).
+
+## Script-level edge cases (bash 5.2, Linux)
+
+| Input file | Expected | Result |
+|---|---|---|
+| BOM + `3.3.0` + CRLF | `3.3.0` | pass |
+| BOM + CRLF blank lines + `  3.3.0` | `3.3.0` | pass |
+| BOM + LF blank lines + `3.3.0` | `3.3.0` | pass |
+| BOM + `  3.3.0 x` | `3.3.0` | pass |
+| BOM + blank line + `../foo` | rejected | rejected |
+| BOM + blank line + `*` | literal `*` (no glob expansion) | pass |
+| BOM + blank lines only | exit 1 | exit 1 |
+| `3.3.0` (no BOM) | `3.3.0` | pass |
+
+The original one-line fix (`version="${version#$'\xef\xbb\xbf'}"`) returned an empty version for every "BOM followed by whitespace" case above.
