@@ -27,11 +27,17 @@ read -n 1024 -d "" -r version rest <"$VERSION_FILE" || :
 bom=$'\xef\xbb\xbf'
 if [[ $version == "$bom"* ]]; then
   version="${version#"$bom"}"
-  [ -n "$version" ] || read -d "" -r version _ <<<"$rest" || :
+  if [ -z "$version" ]; then
+    set -f
+    for version in $rest; do
+      [ -z "$version" ] || break
+    done
+    set +f
+  fi
 fi
 ```
 
-The BOM is held in a variable and quoted in the expansion for portability to bash 3.2 (macOS).
+The BOM is held in a variable and quoted in the expansion for portability to bash 3.2 (macOS). The fallback takes the first **non-empty** word: on bash 3.2, when the BOM is followed by CRLF blank lines, `$rest` keeps a leading `\r` (a non-whitespace `IFS` character), so plain word splitting yields an empty first field. bash 5 strips it. This was caught by the macOS bash 3.2 CI job in this repo; an intermediate version that re-read `$rest` with `read` passed on bash 5 but failed on 3.2.
 
 An earlier one-line version (`version="${version#$'\xef\xbb\xbf'}"`) missed the case where the BOM is followed by spaces or blank lines: the version came back empty and rbenv exited 1 with no message.
 

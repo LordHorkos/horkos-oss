@@ -1,4 +1,4 @@
-From 628ff0d684539816deefe520141f2c5337e343f7 Mon Sep 17 00:00:00 2001
+From 96553eb8e6d270e1415a0b3119401d6ce2f601c4 Mon Sep 17 00:00:00 2001
 From: LordHorkos <286525758+LordHorkos@users.noreply.github.com>
 Date: Mon, 2 Nov 2026 01:13:27 +0000
 Subject: [PATCH] Strip a UTF-8 byte order mark when reading version files
@@ -16,26 +16,34 @@ handling of leading spaces and blank lines.
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01LuQGGFrDvy184LJzYrY4hM
 ---
- libexec/rbenv-version-file-read |  9 ++++++++-
+ libexec/rbenv-version-file-read | 17 ++++++++++++++++-
  test/version-file-read.bats     | 18 ++++++++++++++++++
- 2 files changed, 26 insertions(+), 1 deletion(-)
+ 2 files changed, 34 insertions(+), 1 deletion(-)
 
 diff --git a/libexec/rbenv-version-file-read b/libexec/rbenv-version-file-read
-index b467d76..3fbc6f4 100755
+index b467d76..47fb155 100755
 --- a/libexec/rbenv-version-file-read
 +++ b/libexec/rbenv-version-file-read
-@@ -8,7 +8,14 @@ VERSION_FILE="$1"
+@@ -8,7 +8,22 @@ VERSION_FILE="$1"
  if [ -s "$VERSION_FILE" ]; then
    # Read the first word from the specified version file. Avoid reading it whole.
    IFS="${IFS}"$'\r'
 -  read -n 1024 -d "" -r version _ <"$VERSION_FILE" || :
 +  read -n 1024 -d "" -r version rest <"$VERSION_FILE" || :
 +  # Strip a UTF-8 byte order mark, as written by some Windows editors. If the
-+  # mark was followed by whitespace, the version is the next word in the file.
++  # mark was followed by whitespace, the version is the next non-empty word.
++  # (Empty words are skipped because bash 3.2 keeps a leading "\r" in $rest.)
 +  bom=$'\xef\xbb\xbf'
 +  if [[ $version == "$bom"* ]]; then
 +    version="${version#"$bom"}"
-+    [ -n "$version" ] || read -d "" -r version _ <<<"$rest" || :
++    if [ -z "$version" ]; then
++      set -f
++      # shellcheck disable=SC2086
++      for version in $rest; do
++        [ -z "$version" ] || break
++      done
++      set +f
++    fi
 +  fi
  
    if [ "$version" = ".." ] || [[ $version == */* ]]; then
