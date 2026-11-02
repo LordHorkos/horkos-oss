@@ -1,0 +1,28 @@
+# Secrets and credentials — never commit
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+credentials/
+secrets/
+.vault*
+*.kdbx
+
+# Local scan output and engagement data
+scans/
+evidence/
+engagements/
+*.sqlite
+*.db
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
+*.pyc

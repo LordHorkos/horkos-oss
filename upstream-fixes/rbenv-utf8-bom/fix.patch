@@ -1,0 +1,74 @@
+From 628ff0d684539816deefe520141f2c5337e343f7 Mon Sep 17 00:00:00 2001
+From: LordHorkos <286525758+LordHorkos@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 01:13:27 +0000
+Subject: [PATCH] Strip a UTF-8 byte order mark when reading version files
+
+Some Windows editors (Notepad, PowerShell Out-File) save files with a
+UTF-8 BOM. rbenv-version-file-read treated the BOM bytes as part of the
+version, producing a confusing "version `3.3.0' is not installed" error
+with an invisible prefix.
+
+Strip a leading BOM before validation, so the directory traversal checks
+still apply to the cleaned value. If the BOM is followed by whitespace,
+fall back to the next word in the file, consistent with the existing
+handling of leading spaces and blank lines.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01LuQGGFrDvy184LJzYrY4hM
+---
+ libexec/rbenv-version-file-read |  9 ++++++++-
+ test/version-file-read.bats     | 18 ++++++++++++++++++
+ 2 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/libexec/rbenv-version-file-read b/libexec/rbenv-version-file-read
+index b467d76..3fbc6f4 100755
+--- a/libexec/rbenv-version-file-read
++++ b/libexec/rbenv-version-file-read
+@@ -8,7 +8,14 @@ VERSION_FILE="$1"
+ if [ -s "$VERSION_FILE" ]; then
+   # Read the first word from the specified version file. Avoid reading it whole.
+   IFS="${IFS}"$'\r'
+-  read -n 1024 -d "" -r version _ <"$VERSION_FILE" || :
++  read -n 1024 -d "" -r version rest <"$VERSION_FILE" || :
++  # Strip a UTF-8 byte order mark, as written by some Windows editors. If the
++  # mark was followed by whitespace, the version is the next word in the file.
++  bom=$'\xef\xbb\xbf'
++  if [[ $version == "$bom"* ]]; then
++    version="${version#"$bom"}"
++    [ -n "$version" ] || read -d "" -r version _ <<<"$rest" || :
++  fi
+ 
+   if [ "$version" = ".." ] || [[ $version == */* ]]; then
+     echo "rbenv: invalid version in \`$VERSION_FILE'" >&2
+diff --git a/test/version-file-read.bats b/test/version-file-read.bats
+index 9dc6232..96c5393 100644
+--- a/test/version-file-read.bats
++++ b/test/version-file-read.bats
+@@ -71,6 +71,24 @@ IN
+   assert_success "1.9.3"
+ }
+ 
++@test "ignores a leading UTF-8 byte order mark" {
++  printf '\xef\xbb\xbf3.3.0\r\n' > my-version
++  run rbenv-version-file-read my-version
++  assert_success "3.3.0"
++}
++
++@test "ignores a UTF-8 byte order mark followed by blank lines" {
++  printf '\xef\xbb\xbf\r\n\r\n  3.3.0\r\n' > my-version
++  run rbenv-version-file-read my-version
++  assert_success "3.3.0"
++}
++
++@test "prevents directory traversal behind a UTF-8 byte order mark" {
++  printf '\xef\xbb\xbf../foo\n' > my-version
++  run rbenv-version-file-read my-version
++  assert_failure "rbenv: invalid version in \`my-version'"
++}
++
+ @test "prevents directory traversal" {
+   cat > my-version <<<".."
+   run rbenv-version-file-read my-version
+-- 
+2.43.0
+
