@@ -13,6 +13,7 @@ The `horkos_sec` package (under `src/`) is a dependency-free request-safety tool
 | `horkos_sec.request_guard` | Fail-closed pre-flight gate for outbound HTTP: method, cap, scope, and SSRF-safe resolution | [docs](docs/request-guard.md) |
 | `horkos_sec.rate_limiter` | Thread-safe token-bucket limiter enforcing a per-second rate and a global request cap | [docs](docs/rate-limiter.md) |
 | `horkos_sec.severity` | Cap findings into a restricted severity band without silently dropping high/critical results | [docs](docs/severity-band.md) |
+| `horkos_sec.hackerone_scope` | Parse a pasted HackerOne program scope (JSON or text) into a ready-to-run `ScopeConfig` | [docs](docs/hackerone-scope.md) |
 
 Other contents:
 
@@ -60,6 +61,14 @@ def fetch(url):
 
 The guard refuses non-GET/HEAD/OPTIONS, out-of-scope URLs, and hosts that resolve to
 private/non-routable addresses — each fail-closed, before any byte leaves.
+
+To build `scope` from a program's own scope instead of a hand-written allowlist,
+paste the HackerOne scope (JSON or the copied table) through `parse_hackerone_scope`:
+
+```python
+from horkos_sec import parse_hackerone_scope
+scope = parse_hackerone_scope(pasted_scope_text).config
+```
 
 ## Layout
 

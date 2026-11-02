@@ -18,7 +18,30 @@ def test_allows_root_and_subdomain():
 
 def test_rejects_unrelated_host():
     r = check_scope("https://evil.test/a", _cfg())
-    assert not r.in_scope and "not in allowed_domains" in r.reason
+    assert not r.in_scope and "not in scope" in r.reason
+
+
+def test_allowed_exact_admits_only_exact_host():
+    c = ScopeConfig(allowed_domains=[], allowed_exact=["api.example.com"])
+    assert check_scope("https://api.example.com/a", c).in_scope
+    assert not check_scope("https://sub.api.example.com/a", c).in_scope
+    assert not check_scope("https://example.com/a", c).in_scope
+
+
+def test_mix_wildcard_subtree_and_exact_host():
+    # *.example.com (subtree) alongside a specific host on another domain
+    c = ScopeConfig(allowed_domains=["example.com"], allowed_exact=["app.other.test"])
+    assert check_scope("https://x.example.com/a", c).in_scope      # subtree
+    assert check_scope("https://app.other.test/a", c).in_scope     # exact
+    assert not check_scope("https://api.other.test/a", c).in_scope  # not the exact host
+
+
+def test_config_requires_some_allow():
+    try:
+        ScopeConfig(allowed_domains=[], allowed_exact=[])
+    except ValueError:
+        return
+    raise AssertionError("empty allow lists must raise")
 
 
 def test_scheme_must_be_allowed():

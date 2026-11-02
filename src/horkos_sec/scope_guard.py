@@ -12,6 +12,11 @@ Two matching subtleties, both deliberate:
     `exact_match=True` to admit only the exact hosts listed — subdomains are
     then refused unless listed themselves.
 
+  * Allowed-exact hosts (`allowed_exact`) are admitted as exact hosts only,
+    regardless of `exact_match`. This lets a single config mix wildcard assets
+    (subtree, in `allowed_domains`) with specific hosts (exact, in
+    `allowed_exact`) — the shape a HackerOne scope usually has.
+
   * Disallowed domains are stricter: a BARE root blocks only that exact host,
     while a `.`- or `*.`-prefixed entry blocks the whole subtree. So
     `prod.example.com` as a bare disallowed entry does not wrongly reject an
@@ -32,10 +37,15 @@ class ScopeConfig:
     # exact_match=True => allowed_domains admits ONLY the exact hosts listed;
     # subdomains are refused unless themselves listed.
     exact_match: bool = False
+    # Hosts admitted as exact matches only, independent of exact_match. Use for
+    # specific in-scope hosts alongside wildcard subtrees in allowed_domains.
+    allowed_exact: List[str] = field(default_factory=list)
 
     def __post_init__(self):
-        if not self.allowed_domains:
-            raise ValueError("ScopeConfig: allowed_domains must not be empty.")
+        if not self.allowed_domains and not self.allowed_exact:
+            raise ValueError(
+                "ScopeConfig: allowed_domains or allowed_exact must be non-empty."
+            )
 
 
 @dataclass
@@ -78,13 +88,18 @@ def check_scope(url: str, scope: ScopeConfig) -> ScopeResult:
                 f"Hostname '{hostname}' matches disallowed domain '{blocked}'."
             )
 
+    for allowed in scope.allowed_exact:
+        if _matches(hostname, allowed, exact=True):
+            return ScopeResult(True)
+
     for allowed in scope.allowed_domains:
         if _matches(hostname, allowed, exact=scope.exact_match):
             return ScopeResult(True)
 
     return ScopeResult(
         False,
-        f"Hostname '{hostname}' is not in allowed_domains {scope.allowed_domains}."
+        f"Hostname '{hostname}' is not in scope "
+        f"(allowed_domains={scope.allowed_domains}, allowed_exact={scope.allowed_exact})."
     )
 
 
