@@ -10,6 +10,7 @@ Open-source security work by **HORKOS** — fixes, tools, and research released 
 | [`lib/severity-band`](lib/severity-band) | Cap findings into a restricted severity band without silently dropping high/critical results | Released |
 | [`lib/rate-limiter`](lib/rate-limiter) | Thread-safe token-bucket limiter enforcing a per-second rate and a global request cap | Released |
 | [`lib/request-guard`](lib/request-guard) | Fail-closed pre-flight gate for outbound HTTP: method, cap, scope, and SSRF-safe resolution | Released |
+| [`lib/safe-resolver`](lib/safe-resolver) | SSRF-safe DNS resolver: validates every resolved address against private/non-routable ranges | Released |
 | [`tools/scrubber`](tools/scrubber) | Redact a source tree before open-sourcing it | Released |
 
 ## Layout
