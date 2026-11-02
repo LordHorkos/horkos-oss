@@ -1,0 +1,84 @@
+name: Upstream fixes
+
+# For every upstream-fixes/<name>/ that has an upstream.env:
+#   1. clone the upstream project at UPSTREAM_REF
+#   2. apply fix.patch with `git am` (fails if upstream has drifted)
+#   3. run the fix's ci.sh inside the patched checkout
+# Runs on Ubuntu and macOS, plus macOS forced onto the system bash 3.2.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "upstream-fixes/**"
+      - ".github/workflows/upstream-fixes.yml"
+  pull_request:
+    paths:
+      - "upstream-fixes/**"
+      - ".github/workflows/upstream-fixes.yml"
+  schedule:
+    - cron: "17 6 * * 1" # weekly drift check against upstream
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      fixes: ${{ steps.list.outputs.fixes }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: list
+        run: |
+          fixes=$(find upstream-fixes -mindepth 2 -maxdepth 2 -name upstream.env -printf '%h\n' | sort | jq -R . | jq -sc .)
+          echo "Found: $fixes"
+          echo "fixes=$fixes" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: discover
+    if: needs.discover.outputs.fixes != '[]'
+    name: ${{ matrix.fix }} (${{ matrix.os }}, ${{ matrix.shell }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        fix: ${{ fromJSON(needs.discover.outputs.fixes) }}
+        os: [ubuntu-latest, macos-latest]
+        shell: [default, bash-3.2]
+        exclude:
+          - os: ubuntu-latest
+            shell: bash-3.2
+    env:
+      FIX: ${{ matrix.fix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: oss
+
+      - name: Clone upstream and apply fix
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1090
+          source "oss/$FIX/upstream.env"
+          git clone -q --depth 1 --branch "$UPSTREAM_REF" "$UPSTREAM_REPO" upstream
+          cd upstream
+          echo "Upstream: $UPSTREAM_REPO @ $(git rev-parse --short HEAD)"
+          git -c user.name=ci -c user.email=ci@localhost am -q "../oss/$FIX/fix.patch"
+          git log --oneline -2
+
+      - name: Force macOS system bash 3.2
+        if: matrix.shell == 'bash-3.2'
+        run: |
+          mkdir -p "$RUNNER_TEMP/bash32"
+          ln -s /bin/bash "$RUNNER_TEMP/bash32/bash"
+          echo "$RUNNER_TEMP/bash32" >> "$GITHUB_PATH"
+
+      - name: Run fix CI
+        working-directory: upstream
+        env:
+          CI: "true"
+        run: |
+          echo "bash on PATH: $(command -v bash) — $(bash --version | head -1)"
+          bash "../oss/$FIX/ci.sh"
