@@ -66,3 +66,14 @@ jobs:
       - name: safe-resolver tests
         working-directory: lib/safe-resolver
         run: python3 test_safe_resolver.py
+
+  scope-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: scope-guard tests
+        working-directory: lib/scope-guard
+        run: python3 test_scope_guard.py

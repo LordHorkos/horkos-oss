@@ -11,29 +11,29 @@ Open-source security work by **HORKOS** — fixes, tools, and research released 
 | [`lib/rate-limiter`](lib/rate-limiter) | Thread-safe token-bucket limiter enforcing a per-second rate and a global request cap | Released |
 | [`lib/request-guard`](lib/request-guard) | Fail-closed pre-flight gate for outbound HTTP: method, cap, scope, and SSRF-safe resolution | Released |
 | [`lib/safe-resolver`](lib/safe-resolver) | SSRF-safe DNS resolver: validates every resolved address against private/non-routable ranges | Released |
+| [`lib/scope-guard`](lib/scope-guard) | In-scope URL decision with allow/deny domain matching and subtree rules | Released |
 | [`tools/scrubber`](tools/scrubber) | Redact a source tree before open-sourcing it | Released |
 
 ## Composing the request-safety toolkit
 
-Four of the `lib/` modules are built to click together into one safe outbound-HTTP
-path: `safe-resolver` plugs into `request-guard`'s injected `resolve`, you supply a
-`scope_check`, and `rate-limiter` throttles what the guard admits.
+Five of the `lib/` modules click together into one safe outbound-HTTP path:
+`scope-guard` and `safe-resolver` plug into `request-guard`'s injected
+`scope_check` and `resolve`, and `rate-limiter` throttles what the guard admits.
 
 ```python
-from safe_resolver import resolve          # lib/safe-resolver
-from request_guard import RequestGuard     # lib/request-guard
-from rate_limiter import TokenBucket       # lib/rate-limiter
-from urllib.parse import urlparse
+from functools import partial
+from scope_guard import ScopeConfig, check_scope   # lib/scope-guard
+from safe_resolver import resolve                   # lib/safe-resolver
+from request_guard import RequestGuard              # lib/request-guard
+from rate_limiter import TokenBucket                # lib/rate-limiter
 
-ALLOWED_HOSTS = {"example.com", "api.example.com"}
+scope = ScopeConfig(allowed_domains=["example.com"], allowed_schemes=["https"])
 
-class Scope:                               # request-guard reads .in_scope / .reason
-    def __init__(self, url):
-        host = urlparse(url).hostname or ""
-        self.in_scope = host in ALLOWED_HOSTS
-        self.reason = "" if self.in_scope else f"{host} not in allowlist"
-
-guard = RequestGuard(scope_check=Scope, resolve=resolve, max_requests=500)
+guard = RequestGuard(
+    scope_check=partial(check_scope, scope=scope),
+    resolve=resolve,
+    max_requests=500,
+)
 bucket = TokenBucket(rate=0.3, burst=3, max_requests=500)
 
 def fetch(url):
