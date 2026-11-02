@@ -8,6 +8,7 @@ Open-source security work by **HORKOS** — fixes, tools, and research released 
 |---|---|---|
 | [`upstream-fixes/rbenv-utf8-bom`](upstream-fixes/rbenv-utf8-bom) | rbenv fails to read a `.ruby-version` file saved with a UTF-8 byte order mark | Submitted upstream: [rbenv#1665](https://github.com/rbenv/rbenv/pull/1665) |
 | [`lib/severity-band`](lib/severity-band) | Cap findings into a restricted severity band without silently dropping high/critical results | Released |
+| [`lib/rate-limiter`](lib/rate-limiter) | Thread-safe token-bucket limiter enforcing a per-second rate and a global request cap | Released |
 | [`tools/scrubber`](tools/scrubber) | Redact a source tree before open-sourcing it | Released |
 
 ## Layout
