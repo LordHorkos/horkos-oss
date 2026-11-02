@@ -1,6 +1,6 @@
 name: Upstream fixes
 
-# For every upstream-fixes/<name>/ that has an upstream.env:
+# For every upstream-fixes/<name>/ that has an upstream.conf:
 #   1. clone the upstream project at UPSTREAM_REF
 #   2. apply fix.patch with `git am` (fails if upstream has drifted)
 #   3. run the fix's ci.sh inside the patched checkout
@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v7
       - id: list
         run: |
-          fixes=$(find upstream-fixes -mindepth 2 -maxdepth 2 -name upstream.env -printf '%h\n' | sort | jq -R . | jq -sc .)
+          fixes=$(find upstream-fixes -mindepth 2 -maxdepth 2 -name upstream.conf -printf '%h\n' | sort | jq -R . | jq -sc .)
           echo "Found: $fixes"
           echo "fixes=$fixes" >> "$GITHUB_OUTPUT"
 
@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck disable=SC1090
-          source "oss/$FIX/upstream.env"
+          source "oss/$FIX/upstream.conf"
           git clone -q --depth 1 --branch "$UPSTREAM_REF" "$UPSTREAM_REPO" upstream
           cd upstream
           echo "Upstream: $UPSTREAM_REPO @ $(git rev-parse --short HEAD)"
