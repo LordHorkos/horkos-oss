@@ -3,9 +3,9 @@ name: Tools
 on:
   push:
     branches: [main]
-    paths: ["tools/**", ".github/workflows/tools.yml"]
+    paths: ["tools/**", "lib/**", ".github/workflows/tools.yml"]
   pull_request:
-    paths: ["tools/**", ".github/workflows/tools.yml"]
+    paths: ["tools/**", "lib/**", ".github/workflows/tools.yml"]
   workflow_dispatch:
 
 permissions:
@@ -22,3 +22,14 @@ jobs:
       - name: Scrubber tests
         working-directory: tools/scrubber
         run: python3 test_scrub.py
+
+  severity-band:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: severity-band tests
+        working-directory: lib/severity-band
+        run: python3 test_severity.py
