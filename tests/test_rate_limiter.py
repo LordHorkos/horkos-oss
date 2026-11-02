@@ -3,7 +3,7 @@
 import sys
 import time
 
-from rate_limiter import TokenBucket
+from horkos_sec.rate_limiter import TokenBucket
 
 
 def test_burst_available_immediately():

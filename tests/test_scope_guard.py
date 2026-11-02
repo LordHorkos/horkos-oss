@@ -2,7 +2,7 @@
 """Standalone tests for scope_guard.py. Run: python3 test_scope_guard.py."""
 import sys
 
-from scope_guard import ScopeConfig, check_scope
+from horkos_sec.scope_guard import ScopeConfig, check_scope
 
 
 def _cfg(**kw):

@@ -3,7 +3,7 @@
 import sys
 from dataclasses import dataclass
 
-from request_guard import RequestGuard, GuardDecision
+from horkos_sec.request_guard import RequestGuard, GuardDecision
 
 
 @dataclass

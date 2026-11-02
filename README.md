@@ -4,28 +4,41 @@ Open-source security work by **HORKOS** — fixes, tools, and research released 
 
 ## Contents
 
+The `horkos_sec` package (under `src/`) is a dependency-free request-safety toolkit.
+
+| Module | What it is | Docs |
+|---|---|---|
+| `horkos_sec.scope_guard` | In-scope URL decision with allow/deny domain matching and subtree rules | [docs](docs/scope-guard.md) |
+| `horkos_sec.safe_resolver` | SSRF-safe DNS resolver: validates every resolved address against private/non-routable ranges | [docs](docs/safe-resolver.md) |
+| `horkos_sec.request_guard` | Fail-closed pre-flight gate for outbound HTTP: method, cap, scope, and SSRF-safe resolution | [docs](docs/request-guard.md) |
+| `horkos_sec.rate_limiter` | Thread-safe token-bucket limiter enforcing a per-second rate and a global request cap | [docs](docs/rate-limiter.md) |
+| `horkos_sec.severity` | Cap findings into a restricted severity band without silently dropping high/critical results | [docs](docs/severity-band.md) |
+
+Other contents:
+
 | Path | What it is | Status |
 |---|---|---|
 | [`upstream-fixes/rbenv-utf8-bom`](upstream-fixes/rbenv-utf8-bom) | rbenv fails to read a `.ruby-version` file saved with a UTF-8 byte order mark | Submitted upstream: [rbenv#1665](https://github.com/rbenv/rbenv/pull/1665) |
-| [`lib/severity-band`](lib/severity-band) | Cap findings into a restricted severity band without silently dropping high/critical results | Released |
-| [`lib/rate-limiter`](lib/rate-limiter) | Thread-safe token-bucket limiter enforcing a per-second rate and a global request cap | Released |
-| [`lib/request-guard`](lib/request-guard) | Fail-closed pre-flight gate for outbound HTTP: method, cap, scope, and SSRF-safe resolution | Released |
-| [`lib/safe-resolver`](lib/safe-resolver) | SSRF-safe DNS resolver: validates every resolved address against private/non-routable ranges | Released |
-| [`lib/scope-guard`](lib/scope-guard) | In-scope URL decision with allow/deny domain matching and subtree rules | Released |
 | [`tools/scrubber`](tools/scrubber) | Redact a source tree before open-sourcing it | Released |
+
+## Install
+
+```bash
+pip install -e .          # from a checkout
+python -m pytest          # run the test suite
+```
 
 ## Composing the request-safety toolkit
 
-Five of the `lib/` modules click together into one safe outbound-HTTP path:
-`scope-guard` and `safe-resolver` plug into `request-guard`'s injected
-`scope_check` and `resolve`, and `rate-limiter` throttles what the guard admits.
+The five modules click together into one safe outbound-HTTP path: `scope_guard`
+and `safe_resolver` plug into `request_guard`'s injected `scope_check` and
+`resolve`, and `rate_limiter` throttles what the guard admits.
 
 ```python
 from functools import partial
-from scope_guard import ScopeConfig, check_scope   # lib/scope-guard
-from safe_resolver import resolve                   # lib/safe-resolver
-from request_guard import RequestGuard              # lib/request-guard
-from rate_limiter import TokenBucket                # lib/rate-limiter
+from horkos_sec import (
+    ScopeConfig, check_scope, resolve, RequestGuard, TokenBucket,
+)
 
 scope = ScopeConfig(allowed_domains=["example.com"], allowed_schemes=["https"])
 

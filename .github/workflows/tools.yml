@@ -3,15 +3,34 @@ name: Tools
 on:
   push:
     branches: [main]
-    paths: ["tools/**", "lib/**", ".github/workflows/tools.yml"]
+    paths: ["tools/**", "src/**", "tests/**", "pyproject.toml", ".github/workflows/tools.yml"]
   pull_request:
-    paths: ["tools/**", "lib/**", ".github/workflows/tools.yml"]
+    paths: ["tools/**", "src/**", "tests/**", "pyproject.toml", ".github/workflows/tools.yml"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  library:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package + pytest
+        run: |
+          python -m pip install -e .
+          python -m pip install pytest
+      - name: Test
+        run: python -m pytest -q
+
   scrubber:
     runs-on: ubuntu-latest
     steps:
@@ -22,58 +41,3 @@ jobs:
       - name: Scrubber tests
         working-directory: tools/scrubber
         run: python3 test_scrub.py
-
-  severity-band:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: severity-band tests
-        working-directory: lib/severity-band
-        run: python3 test_severity.py
-
-  rate-limiter:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: rate-limiter tests
-        working-directory: lib/rate-limiter
-        run: python3 test_rate_limiter.py
-
-  request-guard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: request-guard tests
-        working-directory: lib/request-guard
-        run: python3 test_request_guard.py
-
-  safe-resolver:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: safe-resolver tests
-        working-directory: lib/safe-resolver
-        run: python3 test_safe_resolver.py
-
-  scope-guard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: scope-guard tests
-        working-directory: lib/scope-guard
-        run: python3 test_scope_guard.py

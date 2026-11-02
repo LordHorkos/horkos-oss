@@ -4,8 +4,8 @@ Run: python3 test_safe_resolver.py."""
 import socket
 import sys
 
-import safe_resolver
-from safe_resolver import resolve, validate_ip, _check_ip
+from horkos_sec import safe_resolver
+from horkos_sec.safe_resolver import resolve, validate_ip, _check_ip
 
 
 # ---- _check_ip / validate_ip: the SSRF core, no DNS ------------------------

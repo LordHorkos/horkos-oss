@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "horkos-sec"
+version = "0.1.0"
+description = "A small, dependency-free request-safety toolkit: scope guard, SSRF-safe resolver, request guard, rate limiter, and severity banding."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "LordHorkos" }]
+keywords = ["security", "ssrf", "rate-limit", "scope", "scanner"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/LordHorkos/horkos-oss"
+Source = "https://github.com/LordHorkos/horkos-oss"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

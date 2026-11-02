@@ -31,3 +31,9 @@ scrub-report.*
 .idea/
 __pycache__/
 *.pyc
+
+# Python packaging
+*.egg-info/
+build/
+dist/
+.pytest_cache/

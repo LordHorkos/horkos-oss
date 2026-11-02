@@ -2,7 +2,7 @@
 """Standalone tests for severity.py. Run: python3 test_severity.py (exit 0 = pass)."""
 import sys
 
-from severity import cap_severity, with_true_severity
+from horkos_sec.severity import cap_severity, with_true_severity
 
 
 def test_cap_passthrough():
