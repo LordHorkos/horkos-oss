@@ -44,3 +44,14 @@ jobs:
       - name: rate-limiter tests
         working-directory: lib/rate-limiter
         run: python3 test_rate_limiter.py
+
+  request-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: request-guard tests
+        working-directory: lib/request-guard
+        run: python3 test_request_guard.py
