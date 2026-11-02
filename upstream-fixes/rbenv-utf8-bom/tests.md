@@ -25,4 +25,4 @@ With the v1 fix, `bats test` ran 180 tests and 179 passed. The one failure, `non
 - Full `bats` suite with the v2 fix
 - bash 3.2 (macOS) run
 
-Both will be covered by rbenv's CI (macOS and Ubuntu) when the pull request is opened.
+Both will be covered by rbenv's CI (macOS and Ubuntu) on [rbenv#1665](https://github.com/rbenv/rbenv/pull/1665).

@@ -1,6 +1,6 @@
 # rbenv: `.ruby-version` with a UTF-8 BOM is not read correctly
 
-**Project:** [rbenv](https://github.com/rbenv/rbenv) · **Affects:** 1.3.2 and `master` at `07e9b1e` · **Status:** fix ready, not yet submitted upstream
+**Project:** [rbenv](https://github.com/rbenv/rbenv) · **Affects:** 1.3.2 and `master` at `07e9b1e` · **Status:** submitted upstream as [rbenv#1665](https://github.com/rbenv/rbenv/pull/1665)
 
 ## Symptom
 
