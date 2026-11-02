@@ -14,6 +14,7 @@ The `horkos_sec` package (under `src/`) is a dependency-free request-safety tool
 | `horkos_sec.rate_limiter` | Thread-safe token-bucket limiter enforcing a per-second rate and a global request cap | [docs](docs/rate-limiter.md) |
 | `horkos_sec.severity` | Cap findings into a restricted severity band without silently dropping high/critical results | [docs](docs/severity-band.md) |
 | `horkos_sec.hackerone_scope` | Parse a pasted HackerOne program scope (JSON or text) into a ready-to-run `ScopeConfig` | [docs](docs/hackerone-scope.md) |
+| `horkos_sec.http_client` | Guarded, IP-pinned, attributed, recorded HTTP fetcher — the one safe egress point | [docs](docs/http-client.md) |
 
 Other contents:
 
