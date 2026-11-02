@@ -20,6 +20,11 @@ engagements/
 *.sqlite
 *.db
 
+# scrubber: local denylists and scrubbed output — never commit
+*denylist*
+*-scrubbed/
+scrub-report.*
+
 # OS / editor
 .DS_Store
 .vscode/
