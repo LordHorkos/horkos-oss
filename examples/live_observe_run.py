@@ -14,7 +14,7 @@ import os
 from horkos_sec import (
     Engagement, parse_hackerone_scope, build_run_plan, RunOptions,
     Controller, AuditLog, KillSwitch, EvidenceStore, har_seeds,
-    write_report, write_html_report,
+    write_report, write_html_report, save_run,
 )
 
 # ------------------------------------------------------------------ CONFIGURE
@@ -72,6 +72,8 @@ result = Controller(plan, audit=audit, kill=kill, evidence=store,
 print(result.summary())
 write_report(result, f"{OUT}/report.md", store=store)
 write_html_report(result, f"{OUT}/dashboard.html", store=store, audit_path=f"{OUT}/audit.jsonl")
+save_run(result, OUT)                     # makes the run show up in the web dashboard
 ok, bad = AuditLog.verify(f"{OUT}/audit.jsonl")
 print("audit verified:", ok, "" if ok else f"(broke at line {bad})")
 print(f"report: {OUT}/report.md   dashboard: {OUT}/dashboard.html")
+print(f"web dashboard: python examples/dashboard_server.py runs   (then open http://127.0.0.1:8787)")

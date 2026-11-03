@@ -25,6 +25,7 @@ The `horkos_sec` package (under `src/`) is a dependency-free request-safety tool
 | `horkos_sec.report` | Render a run's findings into a HackerOne-style markdown report | [docs](docs/report.md) |
 | `horkos_sec.report_html` | Self-contained static HTML dashboard of a run (sortable, severity-colored, XSS-safe), with an optional KASABONKA scorecard merged on top | [docs](docs/dashboard.md) |
 | `horkos_sec.kasabonka` | KASABONKA — rule-based bug-bounty target-selection brain (6-factor scorecard, commit/learn/drop) | [docs](docs/kasabonka.md) |
+| `horkos_sec.persistence` / `horkos_sec.webapp` | Persist runs and serve a local read-only web dashboard (index + per-run view) | [docs](docs/webapp.md) |
 
 Other contents:
 

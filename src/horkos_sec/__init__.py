@@ -31,6 +31,8 @@ from .governance import (
 from .har import parse_har, har_seeds, HarResult
 from .hackerone_scope import parse_hackerone_scope, ParsedScope
 from .kasabonka import KASABONKA, TargetProfile, TargetScore
+from .persistence import save_run, load_run, list_runs, render_run_html
+from .webapp import make_server, serve
 from .http_client import GuardedHTTPClient, FetchResult
 from .rate_limiter import TokenBucket, HostRateLimiter
 from .request_guard import RequestGuard, GuardDecision, ALLOWED_METHODS
@@ -41,7 +43,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.22.0"
+__version__ = "0.23.0"
 
 __all__ = [
     "Controller",
@@ -102,6 +104,12 @@ __all__ = [
     "KASABONKA",
     "TargetProfile",
     "TargetScore",
+    "save_run",
+    "load_run",
+    "list_runs",
+    "render_run_html",
+    "make_server",
+    "serve",
     "cap_severity",
     "with_true_severity",
 ]
