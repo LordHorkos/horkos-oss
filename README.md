@@ -47,6 +47,20 @@ pip install -e .          # from a checkout
 python -m pytest          # run the test suite
 ```
 
+## Run it (CLI + server)
+
+Installing the package provides two console commands:
+
+```bash
+horkos-scan --config engagement.json      # one observe-only scan -> runs/<program>/
+horkos-web  runs 127.0.0.1 8787            # serve the dashboard over ./runs
+```
+
+`horkos-scan` reads a JSON config (see [`deploy/scan.config.example.json`](deploy/scan.config.example.json));
+set `"authorized": true` only after confirming the program permits automated
+scanning. To deploy on a server (systemd or Docker), see
+[`deploy/DEPLOY.md`](deploy/DEPLOY.md).
+
 ## Composing the request-safety toolkit
 
 The five modules click together into one safe outbound-HTTP path: `scope_guard`

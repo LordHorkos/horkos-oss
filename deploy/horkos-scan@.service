@@ -1,0 +1,15 @@
+[Unit]
+Description=horkos-oss observe-only scan (%i)
+After=network.target
+
+[Service]
+Type=oneshot
+User=horkos
+WorkingDirectory=/opt/horkos-oss
+# One config per engagement: /opt/horkos-oss/configs/%i.json
+ExecStart=/opt/horkos-oss/venv/bin/horkos-scan --config /opt/horkos-oss/configs/%i.json
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/horkos-oss/runs

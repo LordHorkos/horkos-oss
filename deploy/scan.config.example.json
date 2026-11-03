@@ -1,0 +1,29 @@
+{
+  "program": "acme",
+  "research_handle": "horkos",
+  "authorized": false,
+
+  "scope_text": "In scope\nWILDCARD\t*.example.com\nURL\tapi.example.com\nOut of scope\nURL\tlegacy.example.com",
+  "seeds": ["https://www.example.com/"],
+  "har_file": null,
+
+  "rate": 0.3,
+  "max_requests": 200,
+  "max_pages": 25,
+  "max_depth": 3,
+  "workers": 1,
+
+  "out_dir": "runs/acme",
+  "audit_key": null,
+
+  "target_profile": {
+    "scope": "focused",
+    "features": ["roles", "payments", "uploads"],
+    "tech_familiarity": "high",
+    "tech_stack": ["rest"],
+    "hall_of_fame": 20,
+    "program_age_months": 4,
+    "last_resolved_days": 75,
+    "platform": "vdp"
+  }
+}

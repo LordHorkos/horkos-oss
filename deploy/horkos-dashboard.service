@@ -1,0 +1,22 @@
+[Unit]
+Description=horkos-oss dashboard (local, read-only)
+After=network.target
+
+[Service]
+Type=simple
+# Adjust User/paths for your server. Keep it bound to localhost and put it behind
+# your own reverse proxy + auth if you ever expose it.
+User=horkos
+WorkingDirectory=/opt/horkos-oss
+Environment=HORKOS_RUNS=/opt/horkos-oss/runs
+ExecStart=/opt/horkos-oss/venv/bin/horkos-web /opt/horkos-oss/runs 127.0.0.1 8787
+Restart=on-failure
+# hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/horkos-oss/runs
+
+[Install]
+WantedBy=multi-user.target
