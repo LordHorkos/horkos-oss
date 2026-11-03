@@ -23,6 +23,7 @@ The `horkos_sec` package (under `src/`) is a dependency-free request-safety tool
 | `horkos_sec.findings` / `horkos_sec.detectors` | Finding model + passive detectors (security headers, cookie flags, info disclosure) | [docs](docs/detectors.md) |
 | `horkos_sec.evidence` | Content-addressed request/response capture so each finding is reproducible | [docs](docs/evidence.md) |
 | `horkos_sec.report` | Render a run's findings into a HackerOne-style markdown report | [docs](docs/report.md) |
+| `horkos_sec.report_html` | Self-contained static HTML dashboard of a run (sortable, severity-colored, XSS-safe) | [docs](docs/dashboard.md) |
 
 Other contents:
 
