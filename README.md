@@ -17,6 +17,7 @@ The `horkos_sec` package (under `src/`) is a dependency-free request-safety tool
 | `horkos_sec.http_client` | Guarded, IP-pinned, attributed, recorded HTTP fetcher — the one safe egress point | [docs](docs/http-client.md) |
 | `horkos_sec.governance` | Authorization gate, tamper-evident audit log, and kill switch for accountable live runs | [docs](docs/governance.md) |
 | `horkos_sec.run_config` | Target intake: authorize seeds into a validated `RunPlan` with a safe rate ceiling | [docs](docs/run-config.md) |
+| `horkos_sec.controller` | Runs a `RunPlan` observe-only through the guarded client, re-authorizing, kill-switch-checking, and auditing each step | [docs](docs/controller.md) |
 
 Other contents:
 
