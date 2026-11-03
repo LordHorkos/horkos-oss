@@ -35,7 +35,7 @@ from .http_client import FetchResult, GuardedHTTPClient
 from .rate_limiter import TokenBucket
 from .request_guard import RequestGuard
 from .run_config import RunPlan
-from .safe_resolver import resolve
+from .safe_resolver import resolve, ResolutionCache
 from .scope_guard import check_scope
 
 
@@ -83,9 +83,10 @@ class Controller:
         self._evidence = evidence
 
         opt = plan.options
+        self._dns_cache = ResolutionCache()
         guard = RequestGuard(
             scope_check=partial(check_scope, scope=plan.engagement.scope),
-            resolve=partial(resolve, allow_private=resolve_allow_private),
+            resolve=partial(resolve, allow_private=resolve_allow_private, cache=self._dns_cache),
             max_requests=opt.max_requests,
         )
         bucket = TokenBucket(rate=opt.rate, burst=opt.burst, max_requests=opt.max_requests)
@@ -150,6 +151,7 @@ class Controller:
             result.abort_reason = str(e)
             self._log("aborted", reason=str(e))
 
+        self._client.close()  # release pooled keep-alive connections
         self._log("run_end", program=plan.engagement.program,
                   fetched=len(result.fetches), findings=len(result.findings),
                   aborted=result.aborted)

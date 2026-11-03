@@ -21,6 +21,8 @@ header separately, or re-pin via validate_ip at connect time.
 
 import ipaddress
 import socket
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -52,30 +54,60 @@ class ResolvedTarget:
     ips: List[str] = field(default_factory=list)   # every address resolved
 
 
-def resolve(hostname: str, allow_private: bool = False) -> ResolvedTarget:
+class ResolutionCache:
+    """Short-TTL cache of hostname -> resolved IP list. It caches only the DNS
+    lookup, never the validation verdict: resolve() re-validates every cached
+    address on every call, so a cached result can never bypass the SSRF checks."""
+
+    def __init__(self, ttl: float = 60.0):
+        self._ttl = ttl
+        self._lock = threading.Lock()
+        self._data: dict = {}
+
+    def get(self, host: str):
+        with self._lock:
+            entry = self._data.get(host)
+            if entry and entry[0] > time.monotonic():
+                return list(entry[1])
+            if entry:
+                self._data.pop(host, None)
+            return None
+
+    def set(self, host: str, ips: List[str]) -> None:
+        with self._lock:
+            self._data[host] = (time.monotonic() + self._ttl, list(ips))
+
+
+def resolve(hostname: str, allow_private: bool = False,
+            cache: Optional["ResolutionCache"] = None) -> ResolvedTarget:
     """
     Resolve hostname → all IPs and validate every one.
     Returns is_valid=False with a denial_reason on any problem, including a
-    single blocked address among several.
+    single blocked address among several. An optional ResolutionCache skips the
+    DNS lookup for a hot host; validation still runs on every call.
     """
     if not hostname or not isinstance(hostname, str):
         return ResolvedTarget(str(hostname), "", False, "Invalid hostname input.")
 
-    try:
-        infos = socket.getaddrinfo(hostname, None)
-    except socket.gaierror as e:
-        return ResolvedTarget(hostname, "", False, f"DNS resolution failed: {e}")
-    except Exception as e:
-        return ResolvedTarget(hostname, "", False, f"Unexpected resolution error: {e}")
+    ips = cache.get(hostname) if cache is not None else None
+    if ips is None:
+        try:
+            infos = socket.getaddrinfo(hostname, None)
+        except socket.gaierror as e:
+            return ResolvedTarget(hostname, "", False, f"DNS resolution failed: {e}")
+        except Exception as e:
+            return ResolvedTarget(hostname, "", False, f"Unexpected resolution error: {e}")
+        # De-duplicate while preserving order.
+        seen: dict = {}
+        for info in infos:
+            seen.setdefault(info[4][0], None)
+        ips = list(seen)
+        if not ips:
+            return ResolvedTarget(hostname, "", False, "No addresses resolved.")
+        if cache is not None:
+            cache.set(hostname, ips)
 
-    # De-duplicate while preserving order.
-    seen: dict[str, None] = {}
-    for info in infos:
-        seen.setdefault(info[4][0], None)
-    ips = list(seen)
-    if not ips:
-        return ResolvedTarget(hostname, "", False, "No addresses resolved.")
-
+    # Always validate every address, cached or freshly resolved.
     for ip_str in ips:
         reason = _check_ip(ip_str, allow_private)
         if reason:

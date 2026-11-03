@@ -63,7 +63,21 @@ a validated IP it refuses rather than falling back to an unpinned connect.
 ## Options
 
 `timeout`, `max_body_bytes` (default 1 MiB), `max_redirects` (default 5),
-`follow_redirects`, `verify_tls` (keep `True` for real targets).
+`follow_redirects`, `verify_tls` (keep `True` for real targets),
+`reuse_connections` (default `True`).
+
+## Efficiency
+
+The client keeps one TLS context for its lifetime and pools keep-alive
+connections per (scheme, host, pinned-ip, port), so repeated fetches to a host
+reuse one TCP+TLS handshake. A stale pooled socket triggers one transparent
+reconnect. Call `client.close()` when done (the controller does this at run end)
+to release pooled sockets. The pool is single-threaded; the controller gives each
+concurrent worker its own client.
+
+Pair it with a `safe_resolver.ResolutionCache` (the controller wires one in) to
+skip repeat DNS lookups for a hot host — every cached address is still
+re-validated on each request, so the cache never bypasses the SSRF checks.
 
 ## Tests
 

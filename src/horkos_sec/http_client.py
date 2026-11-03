@@ -53,7 +53,7 @@ class GuardedHTTPClient:
     def __init__(self, guard, bucket=None, headers: Optional[Dict[str, str]] = None,
                  timeout: float = 10.0, max_body_bytes: int = 1 << 20,
                  max_redirects: int = 5, verify_tls: bool = True,
-                 follow_redirects: bool = True):
+                 follow_redirects: bool = True, reuse_connections: bool = True):
         self._guard = guard
         self._bucket = bucket
         self._headers = dict(headers or {})
@@ -62,6 +62,23 @@ class GuardedHTTPClient:
         self._max_redirects = max_redirects
         self._verify_tls = verify_tls
         self._follow = follow_redirects
+        self._reuse = reuse_connections
+        # One TLS context for the client's lifetime instead of one per request.
+        self._ssl_ctx = ssl.create_default_context()
+        if not verify_tls:
+            self._ssl_ctx.check_hostname = False
+            self._ssl_ctx.verify_mode = ssl.CERT_NONE
+        # Keep-alive pool keyed by (scheme, host, pinned-ip, port). Single-threaded
+        # use only; the controller gives each worker its own client (Phase 5).
+        self._pool: Dict[tuple, object] = {}
+
+    def close(self) -> None:
+        for conn in self._pool.values():
+            try:
+                conn.close()
+            except Exception:
+                pass
+        self._pool.clear()
 
     def fetch(self, url: str, method: str = "GET") -> FetchResult:
         method = method.upper()
@@ -107,34 +124,47 @@ class GuardedHTTPClient:
 
     # ---- transport ---------------------------------------------------------
 
+    def _new_conn(self, https: bool, ip: str, host: str, port: int):
+        if https:
+            return _PinnedHTTPSConnection(ip, host, port, self._timeout, self._ssl_ctx)
+        return _PinnedHTTPConnection(ip, host, port, self._timeout)
+
     def _send(self, url: str, method: str, ip: str):
         parsed = urlparse(url)
         host = parsed.hostname or ""
         https = parsed.scheme == "https"
         port = parsed.port or (443 if https else 80)
         path = urlunparse(("", "", parsed.path or "/", parsed.params, parsed.query, ""))
-
         headers = {"Host": host, **self._headers}
+        key = (parsed.scheme, host, ip, port)
 
-        if https:
-            ctx = ssl.create_default_context()
-            if not self._verify_tls:
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-            conn = _PinnedHTTPSConnection(ip, host, port, self._timeout, ctx)
-        else:
-            conn = _PinnedHTTPConnection(ip, host, port, self._timeout)
-
-        try:
-            conn.request(method, path or "/", headers=headers)
-            resp = conn.getresponse()
-            raw = resp.read(self._max_body + 1)
-            truncated = len(raw) > self._max_body
-            body = raw[: self._max_body]
-            hdrs = {k.lower(): v for k, v in resp.getheaders()}
-            return resp.status, hdrs, body, truncated
-        finally:
-            conn.close()
+        # Try a pooled connection first; a stale keep-alive socket fails on the
+        # first use, so fall back to one fresh reconnect before giving up.
+        conn = self._pool.pop(key, None) if self._reuse else None
+        for attempt in (1, 2):
+            if conn is None:
+                conn = self._new_conn(https, ip, host, port)
+            try:
+                conn.request(method, path or "/", headers=headers)
+                resp = conn.getresponse()
+                raw = resp.read(self._max_body + 1)
+                truncated = len(raw) > self._max_body
+                body = raw[: self._max_body]
+                hdrs = {k.lower(): v for k, v in resp.getheaders()}
+                keep = (self._reuse and not resp.will_close)
+                if keep:
+                    self._pool[key] = conn        # reusable: back in the pool
+                else:
+                    conn.close()
+                return resp.status, hdrs, body, truncated
+            except (http.client.HTTPException, OSError) as e:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                conn = None
+                if attempt == 2:
+                    raise e                        # reconnect also failed
 
 
 class _PinnedHTTPConnection(http.client.HTTPConnection):
