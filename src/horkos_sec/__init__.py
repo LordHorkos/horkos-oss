@@ -19,13 +19,18 @@ from .hackerone_scope import parse_hackerone_scope, ParsedScope
 from .http_client import GuardedHTTPClient, FetchResult
 from .rate_limiter import TokenBucket
 from .request_guard import RequestGuard, GuardDecision, ALLOWED_METHODS
+from .run_config import build_run_plan, RunPlan, RunOptions, PROD_RATE_CEILING
 from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
+    "build_run_plan",
+    "RunPlan",
+    "RunOptions",
+    "PROD_RATE_CEILING",
     "Engagement",
     "authorize",
     "AuthDecision",
