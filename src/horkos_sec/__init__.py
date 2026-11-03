@@ -41,7 +41,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.21.0"
+__version__ = "0.22.0"
 
 __all__ = [
     "Controller",
