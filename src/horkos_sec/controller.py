@@ -22,9 +22,12 @@ Active checks remain a separate, opt-in layer outside this controller.
 
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from functools import partial
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from .detectors import run_passive_detectors
 from .discovery import crawl
@@ -69,7 +72,7 @@ class Controller:
                  kill: Optional[KillSwitch] = None, resolve_allow_private: bool = False,
                  detect: bool = True, discover: bool = False,
                  max_pages: int = 50, max_depth: int = 3,
-                 evidence: Optional[EvidenceStore] = None):
+                 evidence: Optional[EvidenceStore] = None, workers: int = 1):
         self._plan = plan
         self._audit = audit
         self._kill = kill or KillSwitch()
@@ -77,38 +80,49 @@ class Controller:
         self._discover = discover
         self._max_pages = max_pages
         self._max_depth = max_depth
-        # Capture evidence if a store is given, or if the plan names an output dir.
+        self._workers = max(1, workers)
         if evidence is None and plan.options.output_dir:
             evidence = EvidenceStore(plan.options.output_dir)
         self._evidence = evidence
 
         opt = plan.options
+        self._opt = opt
         self._dns_cache = ResolutionCache()
-        guard = RequestGuard(
+        # One shared, thread-safe guard enforces scope + SSRF + the strict global
+        # request cap across every worker.
+        self._guard = RequestGuard(
             scope_check=partial(check_scope, scope=plan.engagement.scope),
             resolve=partial(resolve, allow_private=resolve_allow_private, cache=self._dns_cache),
             max_requests=opt.max_requests,
         )
+        self._lock = threading.Lock()
+
+    def _new_client(self) -> GuardedHTTPClient:
+        opt = self._opt
+        # Each worker gets its own client + its own rate bucket (per-host rate);
+        # the shared guard caps the global total.
         bucket = TokenBucket(rate=opt.rate, burst=opt.burst, max_requests=opt.max_requests)
-        self._client = GuardedHTTPClient(
-            guard, bucket=bucket, headers=opt.headers, timeout=opt.timeout,
+        return GuardedHTTPClient(
+            self._guard, bucket=bucket, headers=opt.headers, timeout=opt.timeout,
             max_redirects=opt.max_redirects, verify_tls=opt.verify_tls,
         )
 
     def _log(self, action: str, **fields) -> None:
         if self._audit is not None:
-            self._audit.record(action, **fields)
+            self._audit.record(action, **fields)  # AuditLog is thread-safe
 
     def run(self) -> RunResult:
         plan = self._plan
         mode = plan.options.mode
         result = RunResult(plan=plan)
-        self._log("run_start", program=plan.engagement.program, mode=mode,
-                  seeds=len(plan.seeds), discover=self._discover, detect=self._detect)
-
         seen_keys = set()
+        self._log("run_start", program=plan.engagement.program, mode=mode,
+                  seeds=len(plan.seeds), discover=self._discover, detect=self._detect,
+                  workers=self._workers)
 
-        def record_findings(r: FetchResult) -> None:
+        def record(url: str, r: FetchResult) -> None:
+            with self._lock:
+                result.fetches.append(FetchRecord(url, r.ok, r.status, r.ip, r.reason, r.redirects))
             if not r.ok:
                 return
             eid = ""
@@ -118,41 +132,68 @@ class Controller:
             if not self._detect:
                 return
             for f in run_passive_detectors(r):
-                if f.key() not in seen_keys:
+                with self._lock:
+                    if f.key() in seen_keys:
+                        continue
                     seen_keys.add(f.key())
                     if eid:
                         f.evidence["evidence_id"] = eid
                     result.findings.append(f)
 
-        def guarded_fetch(url: str) -> FetchResult:
-            self._kill.check()  # raises Aborted, caught below
-            decision = authorize(plan.engagement, url, mode=mode)
-            self._log("authorize", url=url, allowed=decision.allowed, reason=decision.reason)
-            if not decision.allowed:
-                result.fetches.append(FetchRecord(url, False, reason=decision.reason))
-                return FetchResult(False, url, url, reason=decision.reason)
-            r = self._client.fetch(url, method="GET")
-            self._log("request", url=url, ok=r.ok, status=r.status, ip=r.ip,
-                      reason=r.reason, redirects=len(r.redirects))
-            result.fetches.append(FetchRecord(url, r.ok, r.status, r.ip, r.reason, r.redirects))
-            record_findings(r)
-            return r
+        def make_fetch(client: GuardedHTTPClient):
+            def guarded_fetch(url: str) -> FetchResult:
+                self._kill.check()  # raises Aborted
+                decision = authorize(plan.engagement, url, mode=mode)
+                self._log("authorize", url=url, allowed=decision.allowed, reason=decision.reason)
+                if not decision.allowed:
+                    with self._lock:
+                        result.fetches.append(FetchRecord(url, False, reason=decision.reason))
+                    return FetchResult(False, url, url, reason=decision.reason)
+                r = client.fetch(url, method="GET")
+                self._log("request", url=url, ok=r.ok, status=r.status, ip=r.ip,
+                          reason=r.reason, redirects=len(r.redirects))
+                record(url, r)
+                return r
+            return guarded_fetch
+
+        in_scope = lambda u: authorize(plan.engagement, u, mode=mode).allowed
+
+        def process(seeds: List[str]) -> None:
+            client = self._new_client()
+            try:
+                fetch = make_fetch(client)
+                if self._discover:
+                    crawl(seeds, fetch=fetch, in_scope=in_scope,
+                          max_pages=self._max_pages, max_depth=self._max_depth)
+                else:
+                    for url in seeds:
+                        fetch(url)
+            finally:
+                client.close()
 
         try:
-            if self._discover:
-                crawl(plan.seeds, fetch=guarded_fetch,
-                      in_scope=lambda u: authorize(plan.engagement, u, mode=mode).allowed,
-                      max_pages=self._max_pages, max_depth=self._max_depth)
+            groups = _group_by_host(plan.seeds)
+            if self._workers > 1 and len(groups) > 1:
+                with ThreadPoolExecutor(max_workers=self._workers) as pool:
+                    futures = [pool.submit(process, g) for g in groups]
+                    for fut in as_completed(futures):
+                        fut.result()  # re-raises Aborted / errors
             else:
-                for url in plan.seeds:
-                    guarded_fetch(url)
+                process(plan.seeds)
         except Aborted as e:
             result.aborted = True
             result.abort_reason = str(e)
             self._log("aborted", reason=str(e))
 
-        self._client.close()  # release pooled keep-alive connections
         self._log("run_end", program=plan.engagement.program,
                   fetched=len(result.fetches), findings=len(result.findings),
                   aborted=result.aborted)
         return result
+
+
+def _group_by_host(seeds: List[str]) -> List[List[str]]:
+    groups: dict = {}
+    for s in seeds:
+        host = urlparse(s).hostname or ""
+        groups.setdefault(host, []).append(s)
+    return list(groups.values())

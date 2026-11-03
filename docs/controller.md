@@ -47,6 +47,12 @@ de-duplicated across the whole run by `Finding.key()`); `discover=True` crawls
 in-scope links via the same guarded fetch, bounded by `max_pages`/`max_depth`.
 Set `detect=False` to fetch without judging.
 
+`workers=N` (default 1) processes distinct hosts concurrently — each worker gets
+its own HTTP client and rate bucket (per-host rate), while one shared,
+thread-safe guard enforces scope, SSRF, and the **strict** global request cap
+across all of them. The kill switch and audit log are shared and thread-safe;
+findings are de-duplicated across workers. A single-host run stays sequential.
+
 `resolve_allow_private=True` is for lab targets only — it lets the resolver
 admit loopback/private addresses so you can exercise the pipeline against a local
 vulnerable app before pointing it at a real program.

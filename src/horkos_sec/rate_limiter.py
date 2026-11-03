@@ -61,3 +61,46 @@ class TokenBucket:
     @property
     def exhausted(self) -> bool:
         return self._total_consumed >= self._max_requests
+
+
+class HostRateLimiter:
+    """Per-host rate limiting with one shared global lifetime cap.
+
+    Each host gets its own TokenBucket (its own rate/burst), so a slow host does
+    not starve others and politeness is enforced per host. One shared counter
+    enforces the total request ceiling across all hosts. Thread-safe.
+    """
+
+    def __init__(self, rate: float, burst: int, global_max_requests: int):
+        self._rate = rate
+        self._burst = burst
+        self._global_max = global_max_requests
+        self._lock = threading.Lock()
+        self._buckets = {}
+        self._global_consumed = 0
+
+    def _bucket(self, host: str) -> TokenBucket:
+        with self._lock:
+            b = self._buckets.get(host)
+            if b is None:
+                # per-host bucket does the rate; the global cap is enforced here
+                b = TokenBucket(self._rate, self._burst, self._global_max)
+                self._buckets[host] = b
+            return b
+
+    def acquire(self, host: str, max_wait: float = 30.0) -> bool:
+        with self._lock:
+            if self._global_consumed >= self._global_max:
+                return False
+        if not self._bucket(host).acquire(max_wait=max_wait):
+            return False
+        with self._lock:
+            if self._global_consumed >= self._global_max:
+                return False
+            self._global_consumed += 1
+            return True
+
+    @property
+    def consumed(self) -> int:
+        with self._lock:
+            return self._global_consumed

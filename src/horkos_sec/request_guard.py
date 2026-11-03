@@ -21,6 +21,7 @@ and does no resolution.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional, Protocol
 from urllib.parse import urlparse
@@ -62,45 +63,64 @@ class RequestGuard:
         self._resolve = resolve
         self._max_requests = max_requests
         self._request_count = 0
+        self._lock = threading.Lock()
 
     def evaluate(self, url: str, method: str = "GET") -> GuardDecision:
         """
         Full pre-flight check for a proposed request.
         Returns GuardDecision(allowed=False, ...) on ANY failure.
+
+        Thread-safe: the budget slot is reserved atomically before the slow
+        scope/resolve steps and released if any of them deny, so concurrent
+        workers can never together exceed max_requests (a strict cap) and a
+        denied request still consumes nothing.
         """
-        # 1. Method check
+        # 1. Method check (no budget involved)
         if method.upper() not in ALLOWED_METHODS:
             return GuardDecision(
                 False,
                 [f"Method '{method}' not in allowed set {sorted(ALLOWED_METHODS)}."],
             )
 
-        # 2. Request cap
-        if self._request_count >= self._max_requests:
-            return GuardDecision(False, [f"Max requests ({self._max_requests}) reached."])
+        # 2. Reserve a budget slot atomically (strict cap under concurrency)
+        with self._lock:
+            if self._request_count >= self._max_requests:
+                return GuardDecision(False, [f"Max requests ({self._max_requests}) reached."])
+            self._request_count += 1
 
-        # 3. Scope check (URL level)
-        scope_result = self._scope_check(url)
-        if not scope_result.in_scope:
-            return GuardDecision(False, [f"Scope violation: {scope_result.reason}"])
-
-        # 4. Host resolution / IP validation
         try:
-            hostname = urlparse(url).hostname or ""
-        except Exception as e:
-            return GuardDecision(False, [f"URL parse error: {e}"])
+            # 3. Scope check (URL level)
+            scope_result = self._scope_check(url)
+            if not scope_result.in_scope:
+                return self._release(GuardDecision(False, [f"Scope violation: {scope_result.reason}"]))
 
-        resolved = self._resolve(hostname)
-        if not resolved.is_valid:
-            return GuardDecision(False, [f"IP validation failed: {resolved.denial_reason}"], resolved)
+            # 4. Host resolution / IP validation
+            try:
+                hostname = urlparse(url).hostname or ""
+            except Exception as e:
+                return self._release(GuardDecision(False, [f"URL parse error: {e}"]))
 
-        # All checks passed — consume budget and allow
-        self._request_count += 1
-        return GuardDecision(True, [], resolved)
+            resolved = self._resolve(hostname)
+            if not resolved.is_valid:
+                return self._release(
+                    GuardDecision(False, [f"IP validation failed: {resolved.denial_reason}"], resolved))
+
+            # All checks passed — keep the reserved slot and allow
+            return GuardDecision(True, [], resolved)
+        except BaseException:
+            self._release(None)
+            raise
+
+    def _release(self, decision):
+        """Return a reserved budget slot (used when a reserved request is denied)."""
+        with self._lock:
+            self._request_count -= 1
+        return decision
 
     @property
     def request_count(self) -> int:
-        return self._request_count
+        with self._lock:
+            return self._request_count
 
     def is_allowed(self, url: str) -> bool:
         """

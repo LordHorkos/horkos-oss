@@ -30,7 +30,7 @@ from .governance import (
 )
 from .hackerone_scope import parse_hackerone_scope, ParsedScope
 from .http_client import GuardedHTTPClient, FetchResult
-from .rate_limiter import TokenBucket
+from .rate_limiter import TokenBucket, HostRateLimiter
 from .request_guard import RequestGuard, GuardDecision, ALLOWED_METHODS
 from .report import build_report, write_report
 from .run_config import build_run_plan, RunPlan, RunOptions, PROD_RATE_CEILING
@@ -38,7 +38,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"
 
 __all__ = [
     "Controller",
@@ -79,6 +79,7 @@ __all__ = [
     "GuardedHTTPClient",
     "FetchResult",
     "TokenBucket",
+    "HostRateLimiter",
     "RequestGuard",
     "GuardDecision",
     "ALLOWED_METHODS",
