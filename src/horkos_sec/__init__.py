@@ -18,7 +18,7 @@ from .detectors import (
     run_passive_detectors, detect_security_headers, detect_cookies,
     detect_info_disclosure,
 )
-from .discovery import crawl, extract, CrawlResult, Form
+from .discovery import crawl, extract, parse_robots, parse_sitemap, CrawlResult, Form
 from .evidence import EvidenceStore
 from .findings import Finding, make_finding
 from .governance import (
@@ -34,7 +34,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.14.0"
+__version__ = "0.15.0"
 
 __all__ = [
     "Controller",
@@ -49,6 +49,8 @@ __all__ = [
     "make_finding",
     "crawl",
     "extract",
+    "parse_robots",
+    "parse_sitemap",
     "CrawlResult",
     "Form",
     "EvidenceStore",

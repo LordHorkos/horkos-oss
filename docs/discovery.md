@@ -35,6 +35,13 @@ result.skipped_out_of_scope  # links that were seen but not followed
 
 ## Behaviour
 
+- **robots.txt + sitemap.xml** (`discover_meta=True`, default): before crawling,
+  it pulls in-scope URLs from each seed host's `robots.txt` (Disallow/Allow paths
+  and `Sitemap:` entries) and `sitemap.xml` (`<loc>` URLs, parsed by regex — no
+  XML parser, so no XXE on an untrusted sitemap). Out-of-scope entries are
+  skipped.
+- **Provenance**: `result.provenance[url]` records where each URL was found —
+  `"seed"`, `"robots"`, `"sitemap"`, or the parent page URL.
 - **Breadth-first**, capped by `max_pages` (fetches) and `max_depth` (link hops).
 - **In-scope only**: seeds and discovered links are checked with `in_scope`;
   anything else goes to `skipped_out_of_scope`, never fetched.

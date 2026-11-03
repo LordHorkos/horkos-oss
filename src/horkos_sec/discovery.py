@@ -15,6 +15,7 @@ GET and follow in-scope links; nothing is mutated or injected.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Callable, Dict, List, Optional, Set, Tuple
@@ -41,6 +42,7 @@ class CrawlResult:
     params: Set[str] = field(default_factory=set)             # query param names seen
     forms: List[Form] = field(default_factory=list)
     skipped_out_of_scope: Set[str] = field(default_factory=set)
+    provenance: Dict[str, str] = field(default_factory=dict)  # url -> where it was found
 
     def summary(self) -> str:
         return (f"fetched={len(self.fetched)} discovered={len(self.discovered)} "
@@ -104,6 +106,96 @@ def _normalize(url: str) -> str:
     return urlunsplit((s.scheme, s.netloc, s.path or "/", s.query, ""))  # drop fragment
 
 
+_LOC = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.IGNORECASE)
+
+
+def parse_robots(text: str, base_url: str):
+    """Return (candidate_urls, sitemap_urls) from a robots.txt body."""
+    urls: Set[str] = set()
+    sitemaps: Set[str] = set()
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        field_, _, value = line.partition(":")
+        field_ = field_.strip().lower()
+        value = value.strip()
+        if not value:
+            continue
+        if field_ in ("disallow", "allow"):
+            path = value.split()[0]
+            if path and path != "/":
+                u = _normalize(urljoin(base_url, path.replace("*", "")))
+                if u:
+                    urls.add(u)
+        elif field_ == "sitemap":
+            u = _normalize(value)
+            if u:
+                sitemaps.add(u)
+    return urls, sitemaps
+
+
+def parse_sitemap(xml: str, base_url: str, limit: int = 2000) -> Set[str]:
+    """Return <loc> URLs from a sitemap (or sitemap index). Regex-based — no XML
+    parser, so no XXE exposure on an untrusted sitemap."""
+    out: Set[str] = set()
+    for m in _LOC.finditer(xml):
+        u = _normalize(urljoin(base_url, m.group(1)))
+        if u:
+            out.add(u)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _seed_from_meta(seeds, fetch, in_scope, result: CrawlResult) -> List[str]:
+    """Fetch robots.txt + sitemap.xml for each seed host and return extra
+    in-scope seed URLs, recording provenance. Only in-scope URLs are kept."""
+    extra: List[str] = []
+    roots = {}
+    for s in seeds:
+        sp = urlsplit(_normalize(s) or s)
+        if sp.scheme and sp.netloc:
+            roots[(sp.scheme, sp.netloc)] = f"{sp.scheme}://{sp.netloc}"
+
+    def _add(u: str, source: str):
+        if in_scope(u):
+            if u not in result.discovered:
+                result.discovered.add(u)
+                result.provenance.setdefault(u, source)
+                extra.append(u)
+        else:
+            result.skipped_out_of_scope.add(u)
+
+    for base in roots.values():
+        robots_url = base + "/robots.txt"
+        if not in_scope(robots_url):
+            continue
+        r = fetch(robots_url)
+        if getattr(r, "ok", False):
+            try:
+                text = (r.body or b"").decode("utf-8", "replace")
+            except Exception:
+                text = ""
+            urls, sitemaps = parse_robots(text, base)
+            for u in urls:
+                _add(u, "robots")
+            sitemaps.add(base + "/sitemap.xml")
+            for sm in sitemaps:
+                if not in_scope(sm):
+                    result.skipped_out_of_scope.add(sm)
+                    continue
+                sr = fetch(sm)
+                if getattr(sr, "ok", False):
+                    try:
+                        xml = (sr.body or b"").decode("utf-8", "replace")
+                    except Exception:
+                        continue
+                    for u in parse_sitemap(xml, base):
+                        _add(u, "sitemap")
+    return extra
+
+
 def _is_html(fetch_result) -> bool:
     ct = ""
     headers = getattr(fetch_result, "headers", {}) or {}
@@ -112,13 +204,15 @@ def _is_html(fetch_result) -> bool:
 
 
 def crawl(seeds, fetch: Callable, in_scope: Callable[[str], bool],
-          max_pages: int = 50, max_depth: int = 3) -> CrawlResult:
+          max_pages: int = 50, max_depth: int = 3,
+          discover_meta: bool = True) -> CrawlResult:
     """
     Breadth-first, scope-gated crawl.
 
     fetch(url) -> an object with .ok, .headers, .body (bytes), .final_url
                   (e.g. GuardedHTTPClient.fetch).
     in_scope(url) -> bool. Only in-scope URLs are fetched or enqueued.
+    discover_meta -> also pull in-scope URLs from robots.txt and sitemap.xml.
     """
     result = CrawlResult()
     visited: Set[str] = set()
@@ -131,8 +225,13 @@ def crawl(seeds, fetch: Callable, in_scope: Callable[[str], bool],
         if in_scope(n):
             frontier.append((n, 0))
             result.discovered.add(n)
+            result.provenance.setdefault(n, "seed")
         else:
             result.skipped_out_of_scope.add(n)
+
+    if discover_meta:
+        for u in _seed_from_meta(seeds, fetch, in_scope, result):
+            frontier.append((u, 0))
 
     while frontier and len(result.fetched) < max_pages:
         url, depth = frontier.pop(0)
@@ -158,7 +257,9 @@ def crawl(seeds, fetch: Callable, in_scope: Callable[[str], bool],
 
         for u in urls:
             if in_scope(u):
-                result.discovered.add(u)
+                if u not in result.discovered:
+                    result.discovered.add(u)
+                    result.provenance.setdefault(u, url)   # found on this page
                 if depth + 1 <= max_depth and u not in visited:
                     frontier.append((u, depth + 1))
             else:
