@@ -20,6 +20,7 @@ happened, and let a run be stopped cleanly.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import threading
@@ -67,11 +68,26 @@ def authorize(engagement: Engagement, url: str, mode: str = "observe") -> AuthDe
 _GENESIS = "0" * 64
 
 
-class AuditLog:
-    """Append-only JSONL audit log with a SHA-256 hash chain."""
+def _chain(prev: str, payload: str, key) -> str:
+    data = (prev + payload).encode("utf-8")
+    if key:
+        return hmac.new(key, data, hashlib.sha256).hexdigest()
+    return hashlib.sha256(data).hexdigest()
 
-    def __init__(self, path: str):
+
+class AuditLog:
+    """Append-only JSONL audit log with a SHA-256 hash chain.
+
+    Default: an unkeyed SHA-256 chain — tamper-EVIDENT (an edit/delete is
+    detectable). Pass a `key` (bytes) to switch the chain to keyed HMAC-SHA256:
+    tamper-RESISTANT, since forging or re-chaining an entry needs the key.
+    verify() must then be given the same key. Keyed mode uses only the standard
+    library (hmac), so it adds no dependency.
+    """
+
+    def __init__(self, path: str, key: Optional[bytes] = None):
         self._path = path
+        self._key = key
         self._lock = threading.Lock()
         self._last_hash = self._read_last_hash()
 
@@ -96,10 +112,11 @@ class AuditLog:
                 "ts": fields.pop("ts", None) or _now(),
                 "action": action,
                 **fields,
+                "alg": "hmac-sha256" if self._key else "sha256",
                 "prev": self._last_hash,
             }
             payload = json.dumps(entry, sort_keys=True, separators=(",", ":"))
-            h = hashlib.sha256((self._last_hash + payload).encode("utf-8")).hexdigest()
+            h = _chain(self._last_hash, payload, self._key)
             entry["h"] = h
             line = json.dumps(entry, sort_keys=True, separators=(",", ":"))
             with open(self._path, "a", encoding="utf-8") as fh:
@@ -108,8 +125,10 @@ class AuditLog:
             return h
 
     @staticmethod
-    def verify(path: str) -> Tuple[bool, Optional[int]]:
-        """Re-walk the chain. Returns (ok, first_bad_line_number or None)."""
+    def verify(path: str, key: Optional[bytes] = None) -> Tuple[bool, Optional[int]]:
+        """Re-walk the chain. Returns (ok, first_bad_line_number or None). For a
+        keyed (HMAC) log, pass the same key; without it a keyed entry can't be
+        verified and fails at that line."""
         prev = _GENESIS
         n = 0
         if not os.path.exists(path):
@@ -126,9 +145,12 @@ class AuditLog:
                     return False, n
                 if entry.get("prev") != prev:
                     return False, n
+                keyed = entry.get("alg") == "hmac-sha256"
+                if keyed and not key:
+                    return False, n   # can't verify a keyed entry without the key
                 payload = json.dumps(entry, sort_keys=True, separators=(",", ":"))
-                h = hashlib.sha256((prev + payload).encode("utf-8")).hexdigest()
-                if h != stored:
+                h = _chain(prev, payload, key if keyed else None)
+                if not hmac.compare_digest(h, stored):
                     return False, n
                 prev = stored
         return True, None

@@ -47,6 +47,19 @@ Thread-safe, and the chain resumes correctly across process restarts (a new
 `AuditLog` on the same file continues the chain). `verify()` returns the first
 bad line number if the chain was broken by editing or deleting an entry.
 
+**Optional keyed (tamper-resistant) mode.** By default the chain is unkeyed
+SHA-256 — tamper-*evident* (an edit is detectable, but an attacker with file
+access can recompute the whole chain). Pass a `key` for an HMAC-SHA256 chain —
+tamper-*resistant*, since re-chaining a forged entry needs the key. `verify()`
+must then get the same key; without it, or with the wrong key, verification
+fails. Keyed mode is stdlib-only (`hmac`), so it adds no dependency.
+
+```python
+log = AuditLog("runs/acme/audit.jsonl", key=secret_key)   # secret_key: bytes
+log.record("request", url=u, status=200)
+AuditLog.verify("runs/acme/audit.jsonl", key=secret_key)   # (True, None)
+```
+
 ## Kill switch — `KillSwitch`
 
 A thread-safe abort flag, optionally backed by a sentinel file so a run can be

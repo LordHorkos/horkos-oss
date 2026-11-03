@@ -42,6 +42,52 @@ _REMEDIATION = {
 }
 
 
+# CWE + CVSS v3.1 base vector/score per finding title (prefix match for families).
+# Scores are deliberately low — these are passive, informational-to-low findings.
+_CWE_CVSS = {
+    "Missing HSTS header": ("CWE-319", "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N", 3.1),
+    "Missing Content-Security-Policy": ("CWE-1021", "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N", 4.3),
+    "Missing X-Content-Type-Options: nosniff": ("CWE-693", "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N", 3.1),
+    "Missing clickjacking protection": ("CWE-1021", "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N", 4.3),
+    "Missing Referrer-Policy": ("CWE-200", "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N", 3.7),
+    "Cookie without Secure flag": ("CWE-614", "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N", 3.7),
+    "Cookie without HttpOnly flag": ("CWE-1004", "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:N/A:N", 4.3),
+    "Cookie without SameSite attribute": ("CWE-1275", "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N", 3.1),
+    "CORS allows any origin with credentials": ("CWE-942", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N", 7.5),
+    "CORS allows any origin (ACAO: *)": ("CWE-942", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+    "CORS allows null origin": ("CWE-942", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+    "Mixed content: http resource on https page": ("CWE-311", "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N", 3.1),
+    "Directory listing enabled": ("CWE-548", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+    "Redirect-like parameter present (unverified)": ("CWE-601", "", 0.0),
+    "Weak or invalid X-Frame-Options value": ("CWE-1021", "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N", 4.3),
+    "Verbose error / stack trace exposed": ("CWE-209", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+    "Internal IP address disclosed in body": ("CWE-200", "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N", 3.7),
+    "Sensitive keyword in code comment": ("CWE-615", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+    "Multiple email addresses exposed": ("CWE-200", "", 0.0),
+}
+
+_CWE_CVSS_PREFIX = {
+    "Private key exposed": ("CWE-312", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N", 7.5),
+    "AWS access key exposed": ("CWE-312", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N", 7.5),
+    "Google API key exposed": ("CWE-312", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+    "GitHub token exposed": ("CWE-312", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N", 7.5),
+    "Slack token exposed": ("CWE-312", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N", 7.5),
+    "JWT exposed": ("CWE-522", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+    "Technology/version disclosure": ("CWE-200", "", 0.0),
+    "__Secure- cookie": ("CWE-614", "", 0.0),
+    "__Host- cookie": ("CWE-614", "", 0.0),
+}
+
+
+def _cwe_cvss(f: Finding):
+    if f.title in _CWE_CVSS:
+        return _CWE_CVSS[f.title]
+    for prefix, val in _CWE_CVSS_PREFIX.items():
+        if f.title.startswith(prefix):
+            return val
+    return ("", "", 0.0)
+
+
 def _remediation(f: Finding) -> str:
     if f.title in _REMEDIATION:
         return _REMEDIATION[f.title]
@@ -114,6 +160,10 @@ def build_report(result: RunResult, store=None, title: Optional[str] = None) -> 
         L.append(f"- **URL:** {f.url}")
         if f.category:
             L.append(f"- **Category:** {f.category}")
+        cwe, cvss, score = _cwe_cvss(f)
+        if cwe:
+            cvss_bit = f" · CVSS {score} `{cvss}`" if cvss else ""
+            L.append(f"- **Weakness:** {cwe}{cvss_bit}")
         detail = _clean_detail(f)
         if detail:
             L.append(f"- **Detail:** {detail}")

@@ -24,10 +24,11 @@ HTTP status and body size; without it the evidence id alone is shown.
 - **Header** — program, date, mode (passive/observe-only), pages fetched, scope,
   and an aborted note if the run was stopped.
 - **Summary** — counts by severity (medium / low / info) and a total.
-- **Findings** — sorted medium → low → info, each with URL, category, detail,
-  evidence id (and status/size when the store is given), any extra evidence data,
-  and a remediation note. A finding capped from high/critical shows both the
-  stored and the reported severity.
+- **Findings** — sorted medium → low → info, each with URL, category, a
+  **CWE id and CVSS v3.1 vector/score** where known, detail, evidence id (and
+  status/size when the store is given), any extra evidence data, and a
+  remediation note. A finding capped from high/critical shows both the stored
+  and the reported severity.
 - **Footer** — a statement that this was passive observation only, no
   exploitation.
 
