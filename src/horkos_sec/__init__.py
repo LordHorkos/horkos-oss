@@ -28,6 +28,7 @@ from .findings import Finding, make_finding
 from .governance import (
     Engagement, authorize, AuthDecision, AuditLog, KillSwitch, Aborted,
 )
+from .har import parse_har, har_seeds, HarResult
 from .hackerone_scope import parse_hackerone_scope, ParsedScope
 from .http_client import GuardedHTTPClient, FetchResult
 from .rate_limiter import TokenBucket, HostRateLimiter
@@ -38,7 +39,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"
 
 __all__ = [
     "Controller",
@@ -91,6 +92,9 @@ __all__ = [
     "ScopeResult",
     "parse_hackerone_scope",
     "ParsedScope",
+    "parse_har",
+    "har_seeds",
+    "HarResult",
     "cap_severity",
     "with_true_severity",
 ]
