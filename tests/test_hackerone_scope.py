@@ -93,6 +93,39 @@ def test_no_web_assets_raises():
     raise AssertionError("a scope with no web assets must raise")
 
 
+def test_scope_table_tab_separated():
+    # the real HackerOne copy: asset-type column, host column, eligibility column
+    t = ("URL\tapi.example.com\tEligible for bounty\n"
+         "WILDCARD\t*.example.com\tEligible for bounty\n"
+         "URL\tlegacy.example.com\tOut of scope")
+    p = parse_hackerone_scope(t)
+    assert p.config.allowed_exact == ["api.example.com"]
+    assert p.config.allowed_domains == ["example.com"]
+    assert "legacy.example.com" in p.config.disallowed_domains
+    assert check_scope("https://api.example.com/x", p.config).in_scope
+    assert not check_scope("https://legacy.example.com/x", p.config).in_scope
+
+
+def test_scope_table_section_headers():
+    t = ("In scope\n"
+         "URL\tapi.example.com\n"
+         "*.example.com\n"
+         "Out of scope\n"
+         "admin.example.com\n"
+         "GOOGLE_PLAY_APP_ID\tcom.example.app")
+    p = parse_hackerone_scope(t)
+    assert "example.com" in p.config.allowed_domains
+    assert "api.example.com" in p.config.allowed_exact
+    assert "admin.example.com" in p.config.disallowed_domains
+    assert any("com.example.app" in s for s in p.skipped)
+    assert not check_scope("https://admin.example.com/x", p.config).in_scope
+
+
+def test_scope_table_multispace_columns():
+    p = parse_hackerone_scope("URL      api.example.com      eligible")
+    assert p.config.allowed_exact == ["api.example.com"]
+
+
 def test_malformed_json_falls_back_to_text():
     # looks like JSON (leading brace) but isn't — must not crash, parse as text
     p = parse_hackerone_scope("{api.example.com\n*.example.com")

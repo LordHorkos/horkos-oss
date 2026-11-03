@@ -12,11 +12,14 @@ Accepts three paste shapes and auto-detects which it got:
   2. A list of asset objects: `[{"asset_identifier": "...", "asset_type": "...",
      "eligible_for_submission": true/false}, ...]`.
 
-  3. Plain text — one asset per line, as copied from the program's scope table.
-     An out-of-scope line is recognised by a trailing/leading marker containing
-     "out of scope" / "out-of-scope" / "excluded", or by a leading "-".
-     A wildcard (`*.example.com` or `.example.com`) becomes a subtree; a bare
-     host becomes an exact in-scope host.
+  3. Plain text — the scope table copied from the program page, or a simple
+     one-asset-per-line list. Columns may be tab- or multi-space-separated; a
+     leading asset-type column (URL / WILDCARD / DOMAIN / CIDR / ...) is
+     recognised and the host is taken from the next column. Out of scope is
+     recognised from a per-line marker ("out of scope" / "excluded"), a leading
+     "-", or an "Out of scope" section header that applies to the lines under it
+     until the next "In scope" header. A wildcard (`*.example.com` or
+     `.example.com`) becomes a subtree; a bare host becomes an exact in-scope host.
 
 Only URL/WILDCARD/DOMAIN-type web assets are mapped. Non-web asset types
 (CIDR, IP range, mobile app packages, source-code repos, hardware, "OTHER",
@@ -30,6 +33,7 @@ the parser is unsure about is skipped and reported, never silently admitted.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import List
 from urllib.parse import urlparse
@@ -39,7 +43,19 @@ from .scope_guard import ScopeConfig
 # Asset types HackerOne uses for web endpoints we can turn into host scope.
 _WEB_ASSET_TYPES = {"URL", "WILDCARD", "DOMAIN", "API", "WEBSITE", ""}
 
+# Every structured-scope asset-type token HackerOne emits, web or not. Used to
+# recognise a leading asset-type column in a pasted table (the host is the next
+# column). Non-web types still end up skipped by _WEB_ASSET_TYPES downstream.
+_ASSET_TYPE_TOKENS = {
+    "URL", "WILDCARD", "DOMAIN", "API", "WEBSITE", "IP_ADDRESS", "CIDR",
+    "SOURCE_CODE", "HARDWARE", "EXECUTABLE", "SMART_CONTRACT", "AI_MODEL",
+    "OTHER", "GOOGLE_PLAY_APP_ID", "APPLE_STORE_APP_ID", "WINDOWS_APP_STORE_APP_ID",
+    "TESTFLIGHT", "OTHER_APK", "OTHER_IPA", "DOWNLOADABLE_EXECUTABLES",
+}
+
 _OUT_MARKERS = ("out of scope", "out-of-scope", "excluded", "not in scope")
+_SECTION_OUT = ("out of scope", "out-of-scope", "out of bounds")
+_SECTION_IN = ("in scope", "in-scope")
 
 
 @dataclass
@@ -146,20 +162,58 @@ def _entries_from_json(doc):
     return out
 
 
+def _is_section_header(line: str, low: str) -> bool:
+    # A short, hostless line mentioning scope/bounds is a section header, not an
+    # asset (e.g. "In scope", "Out of Scope", "Assets in scope:").
+    return ("." not in line and len(line.split()) <= 4
+            and ("scope" in low or "bounds" in low))
+
+
+def _split_columns(line: str) -> List[str]:
+    # Prefer tab columns; then runs of 2+ spaces; then single whitespace.
+    if "\t" in line:
+        cols = line.split("\t")
+    else:
+        cols = re.split(r"\s{2,}", line)
+        if len(cols) == 1:
+            cols = line.split()
+    return [c.strip() for c in cols if c.strip()]
+
+
 def _entries_from_text(text: str):
     out = []
+    section_eligible = True
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
         low = line.lower()
-        eligible = not any(m in low for m in _OUT_MARKERS)
+
+        if _is_section_header(line, low):
+            if any(h in low for h in _SECTION_OUT):
+                section_eligible = False
+            elif any(h in low for h in _SECTION_IN):
+                section_eligible = True
+            continue
+
+        eligible = section_eligible
         if line.startswith("-"):
             eligible = False
             line = line[1:].strip()
-        # Take the first whitespace/comma/pipe/tab field as the asset identifier.
-        ident = line.replace("\t", " ").replace("|", " ").replace(",", " ").split()[0]
-        out.append((ident, "", eligible))
+            low = line.lower()
+        if any(m in low for m in _OUT_MARKERS):
+            eligible = False
+
+        cols = _split_columns(line)
+        if not cols:
+            continue
+        # A leading asset-type column means the host is the next column.
+        atype = ""
+        ident = cols[0]
+        if cols[0].upper() in _ASSET_TYPE_TOKENS:
+            atype = cols[0].upper()
+            ident = cols[1] if len(cols) > 1 else ""
+        out.append((ident, atype, eligible))
     return out
 
 
