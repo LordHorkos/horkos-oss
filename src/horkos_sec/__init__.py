@@ -18,6 +18,7 @@ from .detectors import (
     detect_info_disclosure,
 )
 from .discovery import crawl, extract, CrawlResult, Form
+from .evidence import EvidenceStore
 from .findings import Finding, make_finding
 from .governance import (
     Engagement, authorize, AuthDecision, AuditLog, KillSwitch, Aborted,
@@ -31,7 +32,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 __all__ = [
     "Controller",
@@ -47,6 +48,7 @@ __all__ = [
     "extract",
     "CrawlResult",
     "Form",
+    "EvidenceStore",
     "build_run_plan",
     "RunPlan",
     "RunOptions",

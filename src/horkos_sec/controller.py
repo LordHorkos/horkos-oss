@@ -28,6 +28,7 @@ from typing import List, Optional
 
 from .detectors import run_passive_detectors
 from .discovery import crawl
+from .evidence import EvidenceStore
 from .findings import Finding
 from .governance import AuditLog, Aborted, KillSwitch, authorize
 from .http_client import FetchResult, GuardedHTTPClient
@@ -67,7 +68,8 @@ class Controller:
     def __init__(self, plan: RunPlan, audit: Optional[AuditLog] = None,
                  kill: Optional[KillSwitch] = None, resolve_allow_private: bool = False,
                  detect: bool = True, discover: bool = False,
-                 max_pages: int = 50, max_depth: int = 3):
+                 max_pages: int = 50, max_depth: int = 3,
+                 evidence: Optional[EvidenceStore] = None):
         self._plan = plan
         self._audit = audit
         self._kill = kill or KillSwitch()
@@ -75,6 +77,10 @@ class Controller:
         self._discover = discover
         self._max_pages = max_pages
         self._max_depth = max_depth
+        # Capture evidence if a store is given, or if the plan names an output dir.
+        if evidence is None and plan.options.output_dir:
+            evidence = EvidenceStore(plan.options.output_dir)
+        self._evidence = evidence
 
         opt = plan.options
         guard = RequestGuard(
@@ -102,11 +108,19 @@ class Controller:
         seen_keys = set()
 
         def record_findings(r: FetchResult) -> None:
-            if not (self._detect and r.ok):
+            if not r.ok:
+                return
+            eid = ""
+            if self._evidence is not None:
+                eid = self._evidence.save_response(
+                    r, request_headers={"Host": "", **plan.options.headers}, method="GET")
+            if not self._detect:
                 return
             for f in run_passive_detectors(r):
                 if f.key() not in seen_keys:
                     seen_keys.add(f.key())
+                    if eid:
+                        f.evidence["evidence_id"] = eid
                     result.findings.append(f)
 
         def guarded_fetch(url: str) -> FetchResult:

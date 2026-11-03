@@ -20,6 +20,7 @@ The `horkos_sec` package (under `src/`) is a dependency-free request-safety tool
 | `horkos_sec.controller` | Runs a `RunPlan` observe-only through the guarded client, re-authorizing, kill-switch-checking, and auditing each step | [docs](docs/controller.md) |
 | `horkos_sec.discovery` | Passive scope-gated crawl: expand seeds into in-scope URLs, params, and form targets | [docs](docs/discovery.md) |
 | `horkos_sec.findings` / `horkos_sec.detectors` | Finding model + passive detectors (security headers, cookie flags, info disclosure) | [docs](docs/detectors.md) |
+| `horkos_sec.evidence` | Content-addressed request/response capture so each finding is reproducible | [docs](docs/evidence.md) |
 
 Other contents:
 

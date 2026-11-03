@@ -145,6 +145,25 @@ def test_discover_crawls_and_detects_across_pages():
         srv.shutdown()
 
 
+def test_evidence_captured_and_findings_tagged():
+    import tempfile
+    from horkos_sec.evidence import EvidenceStore
+    srv, port = _server()
+    try:
+        out = tempfile.mkdtemp()
+        plan = _plan(port, seeds=[f"http://127.0.0.1:{port}/"])
+        store = EvidenceStore(out)
+        res = Controller(plan, resolve_allow_private=True, evidence=store).run()
+        assert res.findings
+        eid = res.findings[0].evidence.get("evidence_id")
+        assert eid, "findings must carry an evidence id"
+        assert store.verify(eid)                       # stored body matches hash
+        meta = store.load(eid)
+        assert meta["status"] == 200
+    finally:
+        srv.shutdown()
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]
