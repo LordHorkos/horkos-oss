@@ -30,6 +30,12 @@ Other contents:
 | [`upstream-fixes/rbenv-utf8-bom`](upstream-fixes/rbenv-utf8-bom) | rbenv fails to read a `.ruby-version` file saved with a UTF-8 byte order mark | Submitted upstream: [rbenv#1665](https://github.com/rbenv/rbenv/pull/1665) |
 | [`tools/scrubber`](tools/scrubber) | Redact a source tree before open-sourcing it | Released |
 
+These modules compose into an **observe-only** bug finder (paste scope → authorize
+→ crawl in-scope → passive detect → evidence → report, all audited and
+stoppable), validated end-to-end against a lab target in `tests/test_e2e_labrat.py`.
+See [LAUNCH.md](LAUNCH.md) for the per-engagement go/no-go. Active testing and any
+autonomous "fire" loop are deliberately **not** included.
+
 ## Install
 
 ```bash
