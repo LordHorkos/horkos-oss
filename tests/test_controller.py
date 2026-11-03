@@ -17,9 +17,15 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        # HTML with a missing-headers response and an in-scope link to crawl
         self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Set-Cookie", "sid=abc")       # no flags -> cookie findings
         self.end_headers()
-        self.wfile.write(b"ok")
+        if self.path == "/":
+            self.wfile.write(b'<a href="/next">n</a>')
+        else:
+            self.wfile.write(b"leaf")
 
 
 def _server():
@@ -95,6 +101,46 @@ def test_private_target_refused_without_allow_private():
         assert all(not f.ok for f in res.fetches)
         assert any("IP validation failed" in f.reason or "private" in f.reason.lower()
                    for f in res.fetches)
+    finally:
+        srv.shutdown()
+
+
+def test_detectors_produce_findings():
+    srv, port = _server()
+    try:
+        plan = _plan(port, seeds=[f"http://127.0.0.1:{port}/"])
+        res = Controller(plan, resolve_allow_private=True).run()
+        cats = {f.category for f in res.findings}
+        assert "security-headers" in cats and "cookie" in cats
+        # dedup: each (category,title,url) appears once
+        keys = [f.key() for f in res.findings]
+        assert len(keys) == len(set(keys))
+    finally:
+        srv.shutdown()
+
+
+def test_detect_off_yields_no_findings():
+    srv, port = _server()
+    try:
+        plan = _plan(port, seeds=[f"http://127.0.0.1:{port}/"])
+        res = Controller(plan, resolve_allow_private=True, detect=False).run()
+        assert res.findings == [] and res.fetches[0].ok
+    finally:
+        srv.shutdown()
+
+
+def test_discover_crawls_and_detects_across_pages():
+    srv, port = _server()
+    try:
+        plan = _plan(port, seeds=[f"http://127.0.0.1:{port}/"])
+        res = Controller(plan, resolve_allow_private=True, discover=True,
+                         max_pages=10, max_depth=2).run()
+        fetched = {f.url for f in res.fetches}
+        assert f"http://127.0.0.1:{port}/" in fetched
+        assert f"http://127.0.0.1:{port}/next" in fetched   # crawled the in-scope link
+        # findings deduped across both pages
+        keys = [f.key() for f in res.findings]
+        assert len(keys) == len(set(keys)) and res.findings
     finally:
         srv.shutdown()
 
