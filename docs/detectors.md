@@ -11,6 +11,7 @@ emits `Finding`s.
 | `detect_security_headers` | missing HSTS (HTTPS only), CSP, `X-Content-Type-Options: nosniff`, clickjacking protection (XFO or CSP `frame-ancestors`), `Referrer-Policy` |
 | `detect_cookies` | `Set-Cookie` without `Secure` (HTTPS), `HttpOnly`, or `SameSite` |
 | `detect_info_disclosure` | `Server` / `X-Powered-By` / version-revealing headers |
+| `detect_body` | response **body**: exposed keys/tokens (masked in evidence), stack traces, internal IPs, risky code comments, email harvesting |
 
 ## Usage
 

@@ -13,6 +13,7 @@ The guard composes the others; see the README for a wiring example.
 """
 
 from .controller import Controller, RunResult, FetchRecord
+from .body_detectors import detect_body
 from .detectors import (
     run_passive_detectors, detect_security_headers, detect_cookies,
     detect_info_disclosure,
@@ -33,7 +34,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.12.1"
+__version__ = "0.13.0"
 
 __all__ = [
     "Controller",
@@ -43,6 +44,7 @@ __all__ = [
     "detect_security_headers",
     "detect_cookies",
     "detect_info_disclosure",
+    "detect_body",
     "Finding",
     "make_finding",
     "crawl",

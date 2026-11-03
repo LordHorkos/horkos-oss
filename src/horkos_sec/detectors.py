@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+from .body_detectors import detect_body
 from .findings import Finding, make_finding
 
 
@@ -119,7 +120,7 @@ def detect_info_disclosure(result) -> List[Finding]:
     return out
 
 
-_PASSIVE = (detect_security_headers, detect_cookies, detect_info_disclosure)
+_PASSIVE = (detect_security_headers, detect_cookies, detect_info_disclosure, detect_body)
 
 
 def run_passive_detectors(result, set_cookies: Optional[List[str]] = None) -> List[Finding]:
