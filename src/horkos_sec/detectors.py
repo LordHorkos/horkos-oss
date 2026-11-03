@@ -23,6 +23,10 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from .body_detectors import detect_body
+from .extra_detectors import (
+    detect_cors, detect_mixed_content, detect_directory_listing,
+    detect_open_redirect_params, detect_cookie_prefixes, detect_weak_xfo,
+)
 from .findings import Finding, make_finding
 
 
@@ -46,8 +50,17 @@ def detect_security_headers(result) -> List[Finding]:
 
     csp = h.get("content-security-policy", "")
     if not csp:
-        out.append(make_finding("Missing Content-Security-Policy", "low", url,
-                                 category="security-headers"))
+        # A <meta http-equiv="Content-Security-Policy"> counts too — don't flag
+        # missing CSP when the body sets one that way.
+        body = getattr(result, "body", b"") or b""
+        if isinstance(body, bytes):
+            body = body[:1 << 20].decode("utf-8", "replace")
+        meta_csp = "content-security-policy" in body.lower() and "http-equiv" in body.lower()
+        if meta_csp:
+            csp = "meta"
+        else:
+            out.append(make_finding("Missing Content-Security-Policy", "low", url,
+                                     category="security-headers"))
 
     if h.get("x-content-type-options", "").strip().lower() != "nosniff":
         out.append(make_finding("Missing X-Content-Type-Options: nosniff", "info", url,
@@ -120,17 +133,22 @@ def detect_info_disclosure(result) -> List[Finding]:
     return out
 
 
-_PASSIVE = (detect_security_headers, detect_cookies, detect_info_disclosure, detect_body)
+_PASSIVE = (
+    detect_security_headers, detect_info_disclosure, detect_body,
+    detect_cors, detect_mixed_content, detect_directory_listing,
+    detect_open_redirect_params, detect_weak_xfo,
+)
+# Detectors that need the raw Set-Cookie values (a flat header dict loses dupes).
+_COOKIE_AWARE = (detect_cookies, detect_cookie_prefixes)
 
 
 def run_passive_detectors(result, set_cookies: Optional[List[str]] = None) -> List[Finding]:
     """Run every passive detector over one response, de-duplicated by key."""
     findings: List[Finding] = []
     for det in _PASSIVE:
-        if det is detect_cookies:
-            findings.extend(det(result, set_cookies=set_cookies))
-        else:
-            findings.extend(det(result))
+        findings.extend(det(result))
+    for det in _COOKIE_AWARE:
+        findings.extend(det(result, set_cookies=set_cookies))
     seen = set()
     unique = []
     for f in findings:

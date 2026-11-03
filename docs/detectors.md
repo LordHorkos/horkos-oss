@@ -12,6 +12,15 @@ emits `Finding`s.
 | `detect_cookies` | `Set-Cookie` without `Secure` (HTTPS), `HttpOnly`, or `SameSite` |
 | `detect_info_disclosure` | `Server` / `X-Powered-By` / version-revealing headers |
 | `detect_body` | response **body**: exposed keys/tokens (masked in evidence), stack traces, internal IPs, risky code comments, email harvesting |
+| `detect_cors` | ACAO `*` / `null`, and `*` with credentials |
+| `detect_mixed_content` | http resources referenced on an https page |
+| `detect_directory_listing` | "Index of /" listing pages |
+| `detect_open_redirect_params` | redirect-like query params (flagged **unverified** — confirming is active testing) |
+| `detect_cookie_prefixes` | `__Secure-` / `__Host-` cookie prefix rule violations |
+| `detect_weak_xfo` | `X-Frame-Options` value that isn't DENY/SAMEORIGIN |
+
+A `<meta http-equiv="Content-Security-Policy">` in the body now suppresses the
+"Missing CSP" finding (fewer false positives).
 
 ## Usage
 

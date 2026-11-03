@@ -20,6 +20,10 @@ from .detectors import (
 )
 from .discovery import crawl, extract, parse_robots, parse_sitemap, CrawlResult, Form
 from .evidence import EvidenceStore
+from .extra_detectors import (
+    detect_cors, detect_mixed_content, detect_directory_listing,
+    detect_open_redirect_params, detect_cookie_prefixes, detect_weak_xfo,
+)
 from .findings import Finding, make_finding
 from .governance import (
     Engagement, authorize, AuthDecision, AuditLog, KillSwitch, Aborted,
@@ -34,7 +38,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.15.0"
+__version__ = "0.16.0"
 
 __all__ = [
     "Controller",
@@ -45,6 +49,12 @@ __all__ = [
     "detect_cookies",
     "detect_info_disclosure",
     "detect_body",
+    "detect_cors",
+    "detect_mixed_content",
+    "detect_directory_listing",
+    "detect_open_redirect_params",
+    "detect_cookie_prefixes",
+    "detect_weak_xfo",
     "Finding",
     "make_finding",
     "crawl",
