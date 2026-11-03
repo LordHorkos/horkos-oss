@@ -27,10 +27,12 @@ from .run_config import RunPlan, RunOptions
 from .scope_guard import ScopeConfig
 
 
-def run_to_dict(result: RunResult, target_score: Optional[TargetScore] = None) -> Dict:
+def run_to_dict(result: RunResult, target_score: Optional[TargetScore] = None,
+                correlation=None) -> Dict:
     plan = result.plan
     eng = plan.engagement
     return {
+        "correlation": None if correlation is None else correlation.to_dict(),
         "program": eng.program,
         "date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "mode": plan.options.mode,
@@ -56,11 +58,12 @@ def run_to_dict(result: RunResult, target_score: Optional[TargetScore] = None) -
     }
 
 
-def save_run(result: RunResult, out_dir: str, target_score: Optional[TargetScore] = None) -> str:
+def save_run(result: RunResult, out_dir: str, target_score: Optional[TargetScore] = None,
+             correlation=None) -> str:
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "run.json")
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(run_to_dict(result, target_score), fh, indent=2, sort_keys=True)
+        json.dump(run_to_dict(result, target_score, correlation), fh, indent=2, sort_keys=True)
     return path
 
 
@@ -108,7 +111,12 @@ def render_run_html(data: Dict, store=None) -> str:
     """Rebuild a RunResult from a run.json dict and render the dashboard HTML."""
     from .report_html import build_html_report
     result, score = _rebuild(data)
-    return build_html_report(result, store=store, target_score=score,
+    corr = None
+    cd = data.get("correlation")
+    if cd:
+        from .correlation import Correlation
+        corr = Correlation.from_dict(cd)
+    return build_html_report(result, store=store, target_score=score, correlation=corr,
                              title=f"{data.get('program','')} — {data.get('date','')[:10]}")
 
 
@@ -131,10 +139,12 @@ def list_runs(root: str) -> List[Dict]:
         for f in d.get("findings", []):
             counts[f.get("severity", "info")] = counts.get(f.get("severity", "info"), 0) + 1
         ts = d.get("target_score") or {}
+        cd = d.get("correlation") or {}
         out.append({
             "id": name, "program": d.get("program", name), "date": d.get("date", ""),
             "verdict": ts.get("verdict", ""), "total": ts.get("total", ""),
             "counts": counts, "pages": d.get("pages", 0), "aborted": bool(d.get("aborted")),
+            "issues": cd.get("surfaced_count", ""),
         })
     out.sort(key=lambda r: r["date"], reverse=True)
     return out
@@ -168,19 +178,23 @@ def build_index_html(runs: List[Dict]) -> str:
         verdict = (f'<span class="badge {vb}">{_html.escape(r["verdict"].upper())} '
                    f'{r["total"]}/30</span>') if r["verdict"] else '<span class="meta">—</span>'
         c = r["counts"]
+        iss = r.get("issues", "")
+        iss_cell = (f'<b style="color:#e5ecf5">{iss}</b>' if iss not in ("", None)
+                    else '<span class="meta">—</span>')
         rows.append(
             f'<tr><td><a href="/run/{rid}">{_html.escape(r["program"])}</a>'
             + (' <span class="badge bad">aborted</span>' if r["aborted"] else '') + '</td>'
             f'<td class="meta">{_html.escape(r["date"][:16].replace("T"," "))}</td>'
             f'<td>{verdict}</td>'
+            f'<td>{iss_cell}</td>'
             f'<td class="meta">{c["medium"]}m / {c["low"]}l / {c["info"]}i</td>'
             f'<td class="meta">{r["pages"]}</td></tr>')
     body = ("".join(rows) if rows
-            else '<tr><td colspan="5" class="meta">No runs yet.</td></tr>')
+            else '<tr><td colspan="6" class="meta">No runs yet.</td></tr>')
     return (f'<!doctype html><html><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>horkos-oss runs</title><style>{_INDEX_CSS}</style></head><body><div class="wrap">'
             f'<h1>horkos-oss — runs</h1>'
             f'<table><thead><tr><th>Program</th><th>Date</th><th>Target</th>'
-            f'<th>Findings</th><th>Pages</th></tr></thead><tbody>{body}</tbody></table>'
+            f'<th>Issues</th><th>Observations</th><th>Pages</th></tr></thead><tbody>{body}</tbody></table>'
             f'</div></body></html>')

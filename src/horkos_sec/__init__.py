@@ -25,6 +25,9 @@ from .extra_detectors import (
     detect_open_redirect_params, detect_cookie_prefixes, detect_weak_xfo,
 )
 from .findings import Finding, make_finding
+from .correlation import (
+    correlate, prior_issue_keys, Issue, Correlation, DEFAULT_EMIT_FLOOR,
+)
 from .governance import (
     Engagement, authorize, AuthDecision, AuditLog, KillSwitch, Aborted,
 )
@@ -43,7 +46,7 @@ from .safe_resolver import resolve, validate_ip, ResolvedTarget
 from .scope_guard import check_scope, ScopeConfig, ScopeResult
 from .severity import cap_severity, with_true_severity
 
-__version__ = "0.24.0"
+__version__ = "0.25.0"
 
 __all__ = [
     "Controller",
@@ -62,6 +65,11 @@ __all__ = [
     "detect_weak_xfo",
     "Finding",
     "make_finding",
+    "correlate",
+    "prior_issue_keys",
+    "Issue",
+    "Correlation",
+    "DEFAULT_EMIT_FLOOR",
     "crawl",
     "extract",
     "parse_robots",

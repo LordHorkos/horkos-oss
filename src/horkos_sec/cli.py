@@ -22,6 +22,7 @@ from . import (
     AuditLog, KillSwitch, EvidenceStore, har_seeds, write_report, write_html_report,
     save_run, KASABONKA, TargetProfile,
 )
+from .correlation import correlate, prior_issue_keys
 
 
 def _load_scope(cfg) -> "object":
@@ -84,11 +85,21 @@ def scan_main(argv=None) -> int:
         score = KASABONKA().score(TargetProfile(program=program, **tp))
         print("KASABONKA:", score.summary())
 
-    write_report(result, f"{out}/report.md", store=store)
+    # Correlate raw findings into ranked unique issues, using prior runs of the
+    # same program (under the parent runs dir) for the cross-run stability signal.
+    out_abs = os.path.abspath(out)
+    runs_root = os.path.dirname(out_abs)
+    emit_floor = float(cfg.get("emit_floor", 0.5))
+    prior = prior_issue_keys(runs_root, program, exclude_id=os.path.basename(out_abs))
+    corr = correlate(result.findings, prior=prior, emit_floor=emit_floor)
+    print("triage:", corr.summary())
+
+    write_report(result, f"{out}/report.md", store=store, correlation=corr)
     write_html_report(result, f"{out}/dashboard.html", store=store,
                       audit_path=f"{out}/audit.jsonl",
-                      audit_key=key.encode() if key else None, target_score=score)
-    save_run(result, out, target_score=score)
+                      audit_key=key.encode() if key else None, target_score=score,
+                      correlation=corr)
+    save_run(result, out, target_score=score, correlation=corr)
     ok, bad = AuditLog.verify(f"{out}/audit.jsonl", key=key.encode() if key else None)
     print("audit verified:", ok, "" if ok else f"(broke at line {bad})")
     print(f"outputs in {out}/  (report.md, dashboard.html, run.json, audit.jsonl, evidence/)")

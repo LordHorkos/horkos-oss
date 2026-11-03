@@ -110,7 +110,11 @@ def _clean_detail(f: Finding) -> str:
     return f.detail
 
 
-def build_report(result: RunResult, store=None, title: Optional[str] = None) -> str:
+def build_report(result: RunResult, store=None, title: Optional[str] = None,
+                 correlation=None) -> str:
+    from .correlation import correlate
+    corr = correlation if correlation is not None else correlate(result.findings)
+
     plan = result.plan
     eng = plan.engagement
     findings = sorted(result.findings,
@@ -136,6 +140,33 @@ def build_report(result: RunResult, store=None, title: Optional[str] = None) -> 
     if result.aborted:
         L.append(f"- **Note:** run aborted — {result.abort_reason}")
     L.append("")
+
+    # --- Triage: ranked unique issues (the thing to act on) ---
+    L.append("## Triage — unique issues")
+    L.append("")
+    L.append(f"_{corr.summary()}"
+             + (f"; {corr.prior_runs} prior run(s) used for stability_ " if corr.prior_runs else "_ ")
+             + "")
+    L.append("")
+    if corr.issues:
+        L.append("| # | Conf | Severity | Issue | Pages | CWE · CVSS | Signal |")
+        L.append("|---|---|---|---|---|---|---|")
+        for i, iss in enumerate(corr.issues, 1):
+            sev = iss.severity if iss.true_severity == iss.severity else f"{iss.severity} (rep. {iss.true_severity})"
+            cc = f"{iss.cwe}" + (f" · {iss.cvss_score}" if iss.cvss else "")
+            sig = "stable" if iss.stable else ("new" if iss.is_new else "")
+            L.append(f"| {i} | {iss.confidence:.2f} | {sev} | {iss.title} | "
+                     f"{iss.count} | {cc} | {sig} |")
+        L.append("")
+    else:
+        L.append("_No issues cleared the confidence floor "
+                 f"({corr.emit_floor:.2f}) — nothing recommended for submission._")
+        L.append("")
+    if corr.suppressed:
+        folded = ", ".join(f"{iss.title} ×{iss.count}" for iss in corr.suppressed[:12])
+        more = "" if len(corr.suppressed) <= 12 else f", +{len(corr.suppressed) - 12} more"
+        L.append(f"**Suppressed (low confidence, kept for the record):** {folded}{more}.")
+        L.append("")
 
     L.append("## Summary")
     L.append("")
@@ -189,8 +220,9 @@ def build_report(result: RunResult, store=None, title: Optional[str] = None) -> 
     return "\n".join(L) + "\n"
 
 
-def write_report(result: RunResult, path: str, store=None, title: Optional[str] = None) -> str:
-    md = build_report(result, store=store, title=title)
+def write_report(result: RunResult, path: str, store=None, title: Optional[str] = None,
+                 correlation=None) -> str:
+    md = build_report(result, store=store, title=title, correlation=correlation)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(md)

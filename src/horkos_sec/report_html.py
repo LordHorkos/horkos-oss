@@ -149,9 +149,59 @@ def _kasabonka_panel(score) -> str:
         f'<ul class="recs">{recs}</ul></div>')
 
 
+def _triage_panel(corr) -> str:
+    h = ['<h2>Triage — unique issues</h2>']
+    h.append(f'<div class="meta" style="margin-bottom:8px">{_esc(corr.summary())}'
+             + (f' · {corr.prior_runs} prior run(s) used for stability' if corr.prior_runs else '')
+             + '</div>')
+    if not corr.issues:
+        h.append('<p class="meta"><i>No issue cleared the confidence floor '
+                 f'({corr.emit_floor:.2f}) — nothing recommended for submission.</i></p>')
+    else:
+        h.append('<table><thead><tr>'
+                 '<th data-col="0">Conf</th><th data-col="1">Severity</th>'
+                 '<th data-col="2">Issue</th><th data-col="3">Pages</th>'
+                 '<th data-col="4">CWE</th><th data-col="5">CVSS</th>'
+                 '<th data-col="6">Signal</th></tr></thead><tbody>')
+        for iss in corr.issues:
+            col = _SEV.get(iss.severity, "#94a3b8")
+            sev_txt = (iss.severity if iss.true_severity == iss.severity
+                       else f"{iss.severity} (rep. {iss.true_severity})")
+            if iss.stable:
+                sig = '<span class="badge ok">stable</span>'
+            elif iss.is_new:
+                sig = '<span class="badge warn">new</span>'
+            else:
+                sig = ''
+            # confidence as a 0..99 integer key so the column sorts numerically
+            ckey = int(round(iss.confidence * 100))
+            h.append(
+                f'<tr>'
+                f'<td data-k="{ckey}" style="font-weight:700;color:{col}">{iss.confidence:.2f}</td>'
+                f'<td class="sev" style="color:{col}">'
+                f'<span class="dot" style="color:{col}"></span>{_esc(sev_txt)}</td>'
+                f'<td>{_esc(iss.title)}'
+                + (f'<br><span class="meta">{_esc(iss.detail)}</span>' if iss.detail else '')
+                + '</td>'
+                f'<td data-k="{iss.count}">{iss.count}</td>'
+                f'<td>{_esc(iss.cwe)}</td>'
+                f'<td>{_esc(iss.cvss_score) if iss.cvss else ""}</td>'
+                f'<td>{sig}</td></tr>')
+        h.append('</tbody></table>')
+    if corr.suppressed:
+        folded = ", ".join(f"{_esc(i.title)} ×{i.count}" for i in corr.suppressed[:12])
+        more = "" if len(corr.suppressed) <= 12 else f", +{len(corr.suppressed) - 12} more"
+        h.append(f'<div class="meta" style="margin-top:8px"><b>Suppressed</b> '
+                 f'(low confidence, kept): {folded}{more}.</div>')
+    return "".join(h)
+
+
 def build_html_report(result: RunResult, store=None, title: Optional[str] = None,
                       audit_path: Optional[str] = None, audit_key: Optional[bytes] = None,
-                      target_score=None) -> str:
+                      target_score=None, correlation=None) -> str:
+    from .correlation import correlate
+    corr = correlation if correlation is not None else correlate(result.findings)
+
     plan = result.plan
     eng = plan.engagement
     findings: List[Finding] = sorted(
@@ -189,7 +239,9 @@ def build_html_report(result: RunResult, store=None, title: Optional[str] = None
     if target_score is not None:
         h.append(_kasabonka_panel(target_score))
 
-    h.append('<h2>Findings</h2>')
+    h.append(_triage_panel(corr))
+
+    h.append('<h2>All observations (raw)</h2>')
     h.append('<table class="sum"><tr><th>medium</th><th>low</th><th>info</th><th>total</th></tr>'
              f'<tr><td>{counts["medium"]}</td><td>{counts["low"]}</td>'
              f'<td>{counts["info"]}</td><td><b>{len(findings)}</b></td></tr></table>')
@@ -238,10 +290,10 @@ def build_html_report(result: RunResult, store=None, title: Optional[str] = None
 
 def write_html_report(result: RunResult, path: str, store=None, title: Optional[str] = None,
                       audit_path: Optional[str] = None, audit_key: Optional[bytes] = None,
-                      target_score=None) -> str:
+                      target_score=None, correlation=None) -> str:
     htmls = build_html_report(result, store=store, title=title,
                               audit_path=audit_path, audit_key=audit_key,
-                              target_score=target_score)
+                              target_score=target_score, correlation=correlation)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(htmls)
