@@ -10,21 +10,30 @@ dashboard). Pick bare-metal/systemd or Docker.
 ## Bare metal (Ubuntu + systemd)
 
 ```bash
-sudo useradd -r -m -d /opt/horkos-oss horkos
-sudo -u horkos python3 -m venv /opt/horkos-oss/venv
-sudo -u horkos /opt/horkos-oss/venv/bin/pip install git+https://github.com/LordHorkos/horkos-oss
-sudo -u horkos mkdir -p /opt/horkos-oss/{runs,configs}
+# user, venv, package
+sudo useradd -r -d /opt/horkos-oss -s /usr/sbin/nologin horkos
+sudo python3 -m venv /opt/horkos-oss/venv
+sudo /opt/horkos-oss/venv/bin/pip install git+https://github.com/LordHorkos/horkos-oss
+sudo mkdir -p /opt/horkos-oss/runs /opt/horkos-oss/configs
 
-# one config per engagement
-sudo -u horkos cp deploy/scan.config.example.json /opt/horkos-oss/configs/acme.json
-# edit it: set authorized=true after confirming the program, fill scope + seeds
+# the unit files + example config aren't part of the installed package, so get
+# them from the repo (pip install from git doesn't leave a checkout):
+sudo git clone --depth 1 https://github.com/LordHorkos/horkos-oss /opt/horkos-oss/src
+sudo cp /opt/horkos-oss/src/deploy/scan.config.example.json /opt/horkos-oss/configs/acme.json
+# edit configs/acme.json: set authorized=true after confirming the program, fill scope + seeds
+
+sudo chown -R horkos:horkos /opt/horkos-oss
 
 # dashboard service (localhost:8787, read-only)
-sudo cp deploy/horkos-dashboard.service /etc/systemd/system/
+sudo cp /opt/horkos-oss/src/deploy/horkos-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable --now horkos-dashboard
+systemctl status horkos-dashboard --no-pager
+curl -s http://127.0.0.1:8787/ | head        # should return the runs index HTML
 
 # scheduled scans (templated per config name)
-sudo cp deploy/horkos-scan@.service deploy/horkos-scan@.timer /etc/systemd/system/
+sudo cp /opt/horkos-oss/src/deploy/horkos-scan@.service /opt/horkos-oss/src/deploy/horkos-scan@.timer /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable --now horkos-scan@acme.timer      # runs configs/acme.json daily
 sudo systemctl start horkos-scan@acme.service           # or run once now
 ```
