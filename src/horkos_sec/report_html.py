@@ -55,8 +55,33 @@ def _esc(s) -> str:
     return html.escape(str(s if s is not None else ""))
 
 
+_VERDICT_BADGE = {"commit": "ok", "learn": "", "drop": "bad"}
+
+
+def _kasabonka_panel(score) -> str:
+    """Render a KASABONKA TargetScore as the scorecard panel merged atop the
+    findings. `score` is a horkos_sec.kasabonka.TargetScore."""
+    badge_cls = _VERDICT_BADGE.get(score.verdict, "")
+    rows = []
+    for name, (s, mx, note) in score.factors.items():
+        rows.append(f'<tr><td>{_esc(name.replace("_", " "))}</td>'
+                    f'<td>{s} / {mx}</td><td class="meta">{_esc(note)}</td></tr>')
+    recs = "".join(f"<li>{_esc(r)}</li>" for r in score.recommendations)
+    return (
+        '<h2 style="font-size:16px;margin:18px 0 6px">KASABONKA — target assessment</h2>'
+        f'<div class="meta" style="margin-bottom:8px">'
+        f'<b>{_esc(score.program or "target")}</b> · '
+        f'<span class="badge {badge_cls}">{_esc(score.verdict.upper())} — {score.total}/30</span></div>'
+        '<table class="sum"><thead><tr><th>Factor</th><th>Score</th><th>Why</th></tr></thead><tbody>'
+        + "".join(rows) +
+        f'<tr><td><b>Total</b></td><td><b>{score.total} / 30</b></td><td></td></tr>'
+        '</tbody></table>'
+        f'<ul style="margin:6px 0 0">{recs}</ul>')
+
+
 def build_html_report(result: RunResult, store=None, title: Optional[str] = None,
-                      audit_path: Optional[str] = None, audit_key: Optional[bytes] = None) -> str:
+                      audit_path: Optional[str] = None, audit_key: Optional[bytes] = None,
+                      target_score=None) -> str:
     plan = result.plan
     eng = plan.engagement
     findings: List[Finding] = sorted(
@@ -91,6 +116,10 @@ def build_html_report(result: RunResult, store=None, title: Optional[str] = None
              f'{audit_badge}'
              + (' · <b>run aborted</b>' if result.aborted else '') + '</div>')
 
+    if target_score is not None:
+        h.append(_kasabonka_panel(target_score))
+
+    h.append('<h2 style="font-size:16px;margin:18px 0 6px">Findings</h2>')
     h.append('<table class="sum"><tr><th>medium</th><th>low</th><th>info</th><th>total</th></tr>'
              f'<tr><td>{counts["medium"]}</td><td>{counts["low"]}</td>'
              f'<td>{counts["info"]}</td><td><b>{len(findings)}</b></td></tr></table>')
@@ -137,9 +166,11 @@ def build_html_report(result: RunResult, store=None, title: Optional[str] = None
 
 
 def write_html_report(result: RunResult, path: str, store=None, title: Optional[str] = None,
-                      audit_path: Optional[str] = None, audit_key: Optional[bytes] = None) -> str:
+                      audit_path: Optional[str] = None, audit_key: Optional[bytes] = None,
+                      target_score=None) -> str:
     htmls = build_html_report(result, store=store, title=title,
-                              audit_path=audit_path, audit_key=audit_key)
+                              audit_path=audit_path, audit_key=audit_key,
+                              target_score=target_score)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(htmls)
