@@ -88,10 +88,49 @@ def test_scan_then_serve_end_to_end():
         lab.shutdown()
 
 
+def test_runs_dir_accrues_cross_run_stability():
+    """runs_dir mode gives each run its own flat dir, so the runs index lists
+    history AND the cross-run stability signal accumulates (the Phase-A fix:
+    a pinned out_dir would overwrite and never build history)."""
+    lab, port = _lab()
+    work = tempfile.mkdtemp()
+    runs_root = os.path.join(work, "runs")
+    cfg = {
+        "program": "mon",
+        "authorized": True,
+        "scope_text": "In scope\nURL\t127.0.0.1",
+        "allowed_schemes": ["http"],
+        "seeds": [f"http://127.0.0.1:{port}/"],
+        "rate": 0.3, "max_requests": 50, "max_pages": 10,
+        "runs_dir": runs_root,
+        "emit_floor": 0.0,          # surface everything so prior_seen is easy to read
+    }
+    cfg_path = os.path.join(work, "mon.json")
+    open(cfg_path, "w").write(json.dumps(cfg))
+    try:
+        assert scan_main(["--config", cfg_path, "--run-id", "r1", "--allow-private"]) == 0
+        assert scan_main(["--config", cfg_path, "--run-id", "r2", "--allow-private"]) == 0
+
+        ids = {r["id"] for r in list_runs(runs_root)}
+        assert {"r1", "r2"} <= ids                      # two distinct flat run dirs
+        assert not os.path.exists(os.path.join(runs_root, "r1", "r2"))  # flat, not nested
+
+        d2 = json.load(open(os.path.join(runs_root, "r2", "run.json")))
+        corr = d2["correlation"]
+        allissues = corr["surfaced"] + corr["suppressed"]
+        assert any(i["prior_seen"] >= 1 for i in allissues)   # r1 counted as prior to r2
+    finally:
+        lab.shutdown()
+
+
 def _main():
-    test_scan_then_serve_end_to_end()
-    print("ok 1 test_scan_then_serve_end_to_end")
-    print("RESULT: 1/1 passed")
+    tests = [v for k, v in sorted(globals().items())
+             if k.startswith("test_") and callable(v)]
+    n = 0
+    for t in tests:
+        t(); n += 1; print(f"ok {n} {t.__name__}")
+    print(f"RESULT: {n}/{len(tests)} passed")
+    sys.exit(0 if n == len(tests) else 1)
 
 
 if __name__ == "__main__":

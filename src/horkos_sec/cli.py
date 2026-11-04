@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from typing import Optional
 
 from . import (
@@ -40,13 +41,29 @@ def scan_main(argv=None) -> int:
     ap.add_argument("--config", required=True, help="path to a JSON scan config")
     ap.add_argument("--allow-private", action="store_true",
                     help="permit loopback/private targets (LAB ONLY)")
+    ap.add_argument("--run-id", default=None,
+                    help="explicit run id (dir name under runs_dir); "
+                         "default <program>-<UTC timestamp>")
     args = ap.parse_args(argv)
 
     with open(args.config, "r", encoding="utf-8") as fh:
         cfg = json.load(fh)
 
     program = cfg.get("program") or "program"
-    out = cfg.get("out_dir") or f"runs/{program}"
+    # Where this run's output dir lands. Three modes, in priority order:
+    #   out_dir  — explicit pin to one directory (one-off / lab; reused runs
+    #              OVERWRITE, so cross-run stability does not accumulate)
+    #   runs_dir — monitoring: each run gets its own flat dir <runs_dir>/<run_id>
+    #              with run_id defaulting to <program>-<UTC stamp>, so the runs
+    #              index lists history AND the stability signal accrues across runs
+    #   neither  — default runs/<program> (back-compat, single pinned dir)
+    run_id = args.run_id or cfg.get("run_id") or f"{program}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+    if cfg.get("out_dir"):
+        out = cfg["out_dir"]
+    elif cfg.get("runs_dir"):
+        out = os.path.join(cfg["runs_dir"], run_id)
+    else:
+        out = f"runs/{program}"
     scope = _load_scope(cfg)
 
     seeds = list(cfg.get("seeds") or [])
