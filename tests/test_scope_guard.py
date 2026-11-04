@@ -93,6 +93,31 @@ def test_case_insensitive():
     assert check_scope("https://EXAMPLE.com/a", _cfg()).in_scope
 
 
+def test_rejects_embedded_credentials():
+    # user:pass@host is refused regardless of host match or port policy
+    r = check_scope("https://user:pass@example.com/a", _cfg())
+    assert not r.in_scope and "credentials" in r.reason
+    r2 = check_scope("https://user@example.com/a", _cfg())
+    assert not r2.in_scope and "credentials" in r2.reason
+
+
+def test_allowed_ports_opt_in_denies_nonstandard():
+    c = _cfg(allowed_ports=[443])
+    r = check_scope("https://example.com:8443/a", c)
+    assert not r.in_scope and "Port 8443" in r.reason
+
+
+def test_allowed_ports_admits_default_and_explicit():
+    c = _cfg(allowed_ports=[443])
+    assert check_scope("https://example.com/a", c).in_scope        # no port -> default 443
+    assert check_scope("https://example.com:443/a", c).in_scope    # explicit 443
+
+
+def test_no_port_policy_allows_any_port():
+    # default (allowed_ports=None) keeps lab scanning on odd ports working
+    assert check_scope("https://example.com:8443/a", _cfg()).in_scope
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

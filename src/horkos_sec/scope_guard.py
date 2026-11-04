@@ -40,6 +40,11 @@ class ScopeConfig:
     # Hosts admitted as exact matches only, independent of exact_match. Use for
     # specific in-scope hosts alongside wildcard subtrees in allowed_domains.
     allowed_exact: List[str] = field(default_factory=list)
+    # Optional port allowlist. None (default) admits any port — preserves lab
+    # scanning on odd loopback ports (e.g. 127.0.0.1:8099). Set e.g. [443] on a
+    # real engagement to refuse anything but the standard port. A URL with no
+    # explicit port is treated as its scheme default (https->443, http->80).
+    allowed_ports: Optional[List[int]] = None
 
     def __post_init__(self):
         if not self.allowed_domains and not self.allowed_exact:
@@ -75,6 +80,29 @@ def check_scope(url: str, scope: ScopeConfig) -> ScopeResult:
             False,
             f"Scheme '{parsed.scheme}' not in allowed_schemes {scope.allowed_schemes}."
         )
+
+    # Embedded credentials (user:pass@host) are a credential-leak and host-
+    # confusion vector with no legitimate use in a scoped GET — fail closed,
+    # unconditionally (independent of allowed_ports; harmless to lab targets,
+    # which never carry userinfo).
+    try:
+        if parsed.username or parsed.password:
+            return ScopeResult(False, "URL carries embedded credentials (userinfo); refused.")
+    except ValueError as e:
+        return ScopeResult(False, f"URL userinfo parse failed: {e}")
+
+    # Port policy (opt-in). None means any port, so lab scans on odd loopback
+    # ports keep working; a real engagement sets allowed_ports (e.g. [443]).
+    if scope.allowed_ports is not None:
+        try:
+            port = parsed.port
+        except ValueError as e:
+            return ScopeResult(False, f"URL has an invalid port: {e}")
+        if port is None:
+            port = {"https": 443, "http": 80}.get(parsed.scheme)
+        if port is not None and port not in scope.allowed_ports:
+            return ScopeResult(
+                False, f"Port {port} not in allowed_ports {scope.allowed_ports}.")
 
     hostname = parsed.hostname or ""
     if not hostname:

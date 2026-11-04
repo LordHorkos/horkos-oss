@@ -29,11 +29,18 @@ from .correlation import correlate, prior_issue_keys
 def _load_scope(cfg) -> "object":
     schemes = cfg.get("allowed_schemes")  # e.g. ["https"] (default) or ["http","https"]
     if cfg.get("scope_text"):
-        return parse_hackerone_scope(cfg["scope_text"], allowed_schemes=schemes).config
-    if cfg.get("scope_file"):
+        config = parse_hackerone_scope(cfg["scope_text"], allowed_schemes=schemes).config
+    elif cfg.get("scope_file"):
         with open(cfg["scope_file"], "r", encoding="utf-8") as fh:
-            return parse_hackerone_scope(fh.read(), allowed_schemes=schemes).config
-    raise SystemExit("config needs scope_text or scope_file")
+            config = parse_hackerone_scope(fh.read(), allowed_schemes=schemes).config
+    else:
+        raise SystemExit("config needs scope_text or scope_file")
+    # Optional port allowlist (real-engagement hardening). Omit for labs so odd
+    # loopback ports keep working; set e.g. [443] for a production target.
+    ports = cfg.get("allowed_ports")
+    if ports:
+        config.allowed_ports = [int(p) for p in ports]
+    return config
 
 
 def scan_main(argv=None) -> int:
